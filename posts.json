@@ -1,0 +1,53 @@
+[
+  {
+    "id": 1779675505938,
+    "title": "teste",
+    "description": "",
+    "type": "video",
+    "mime": "video/mp4",
+    "file": "https://res.cloudinary.com/dpohhnsl6/video/upload/v1779675501/pedra-angular/fsviiixfeajeavnsvmxn.mp4",
+    "url": "https://res.cloudinary.com/dpohhnsl6/video/upload/v1779675501/pedra-angular/fsviiixfeajeavnsvmxn.mp4",
+    "cloudinaryPublicId": "pedra-angular/fsviiixfeajeavnsvmxn",
+    "cloudinaryResourceType": "video",
+    "originalName": "SÃ³ quem Ã© da mÃ­dia vai entender!â¢â¢â¢#igreja #mÃ­dia #reels #igrejapedraangular #cultodedomingo.mp4",
+    "author": "Pr. Daniel",
+    "category": "admin",
+    "createdAt": "2026-05-25T02:18:25.938Z"
+  },
+  {
+    "id": 1779648909389,
+    "title": "Devocional 14 dias.",
+    "description": "Bom dia igrejaa 😁\r\n\r\nVamos iniciar mais um dia do nosso propósito juntos?! Dia 14 buscando mais do que Deus tem para nós.\r\n\r\nA seguir enviarei um áudio com o nosso devocional do dia, para ouvirmos e meditarmos na palavra do Senhor juntos.",
+    "type": "audio",
+    "mime": "audio/ogg",
+    "file": "1779648909339-WhatsApp-Audio-2026-05-24-at-01.03.21.ogg",
+    "originalName": "WhatsApp Audio 2026-05-24 at 01.03.21.ogg",
+    "author": "Pr. Daniel",
+    "category": "admin",
+    "createdAt": "2026-05-24T18:55:09.389Z"
+  },
+  {
+    "id": 1779648518752,
+    "title": "Culto da Família",
+    "description": "24/05/2026",
+    "type": "foto",
+    "mime": "image/jpeg",
+    "file": "1779648518745-CULTO-DA-FAMA-LIA--17-05-2026-.-a--a--NA-o-deixe-de-participar-do-nosso-culto-da-famA-lia.-Todos-os-dom--2-.jpg",
+    "originalName": "CULTO DA FAMÃLIA (17-05-2026). â¢â¢NÃ£o deixe de participar do nosso culto da famÃ­lia. Todos os dom (2).jpg",
+    "author": "Mídia",
+    "category": "media",
+    "createdAt": "2026-05-24T18:48:38.752Z"
+  },
+  {
+    "id": 1779648493189,
+    "title": "Culto da família",
+    "description": "24/04/2026",
+    "type": "foto",
+    "mime": "image/jpeg",
+    "file": "1779648493162-CULTO-DA-FAMA-LIA--17-05-2026-.-a--a--NA-o-deixe-de-participar-do-nosso-culto-da-famA-lia.-Todos-os-dom--1-.jpg",
+    "originalName": "CULTO DA FAMÃLIA (17-05-2026). â¢â¢NÃ£o deixe de participar do nosso culto da famÃ­lia. Todos os dom (1).jpg",
+    "author": "Mídia",
+    "category": "media",
+    "createdAt": "2026-05-24T18:48:13.189Z"
+  }
+]

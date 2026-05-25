@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Administrativo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="topbar">
+      <a class="brand" href="index.html"><img src="assets/logo-pedra-angular.png" alt="Igreja Pedra Angular"></a>
+      <button class="menu-btn" onclick="toggleMenu()" aria-label="Abrir menu">☰</button>
+      <nav class="menu" id="menu">
+        <a href="index.html">Início</a>
+        <a href="midia.html">Mídia</a>
+        <a href="estudos-pr-daniel.html">Estudos Pr. Daniel</a>
+        <a href="publicacoes.html">Publicações</a>
+        <a href="contato.html">Contato</a>
+        <a class="active" href="admin.html">Painel</a>
+        <a href="/logout">Sair</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    <div class="section-title">
+      <h1>Painel Administrativo</h1>
+      <p>Área do Pr. Daniel para publicar imagem, vídeo ou áudio na página Estudos Pr. Daniel, excluir arquivos e alterar a senha dos logins.</p>
+    </div>
+
+    <div class="admin-grid">
+      <div class="panel">
+        <form action="/upload" method="POST" enctype="multipart/form-data">
+          <h2>Nova publicação</h2>
+          <input type="text" name="title" placeholder="Título" required>
+          <textarea name="description" placeholder="Descrição"></textarea>
+          <input type="file" name="media" accept="image/*,video/*,audio/*" required>
+          <button type="submit">Publicar na página Estudos Pr. Daniel</button>
+        </form>
+      </div>
+      <div class="panel">
+        <form action="/alterar-senha" method="POST">
+          <h2>Alterar senha dos logins</h2>
+          <p class="helper">Somente o administrador pode trocar a senha do admin, da mídia ou da secretaria.</p>
+          <select name="emailAlvo" required>
+            <option value="admin@igreja.com">Admin - Pr. Daniel</option>
+            <option value="midia@igreja.com">Mídia</option>
+            <option value="secretaria@igreja.com">Secretaria</option>
+          </select>
+          <input type="password" name="senhaAtual" placeholder="Senha atual do admin" required>
+          <input type="password" name="novaSenha" placeholder="Nova senha" required>
+          <input type="password" name="confirmarSenha" placeholder="Confirmar nova senha" required>
+          <button type="submit">Alterar senha</button>
+        </form>
+      </div>
+    </div>
+
+    <section style="margin-top:45px">
+      <h2>Publicações cadastradas</h2>
+      <div id="admin-posts" class="cards"></div>
+    </section>
+  </main>
+<footer class="site-footer"><p>Igreja do Evangelho Pedra Angular • Todos os direitos reservados.</p>
+  <p>Site desenvolvido por RN Vision Pira.</p></footer>
+  <script src="script.js"></script>
+</body>
+</html>

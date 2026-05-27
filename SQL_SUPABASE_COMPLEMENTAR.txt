@@ -1,0 +1,4 @@
+Cole este código no SQL Editor do Supabase e clique em RUN.
+Ele garante que a descrição da aula funcione no banco.
+
+alter table lessons add column if not exists description text;

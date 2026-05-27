@@ -11,16 +11,21 @@ const app = express();
 const PORT = 3000;
 const usersFile = path.join(__dirname, "users.json");
 const postsFile = path.join(__dirname, "posts.json");
+const coursesFile = path.join(__dirname, "courses.json");
+const attendanceFile = path.join(__dirname, "attendance.json");
 const mediaDir = path.join(__dirname, "public", "midia");
 
 if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
 if (!fs.existsSync(postsFile)) fs.writeFileSync(postsFile, JSON.stringify([], null, 2));
+if (!fs.existsSync(coursesFile)) fs.writeFileSync(coursesFile, JSON.stringify([], null, 2));
+if (!fs.existsSync(attendanceFile)) fs.writeFileSync(attendanceFile, JSON.stringify([], null, 2));
 
 function defaultUsers(){
   return [
     { id: 1, name: "Pr. Daniel", email: "admin@igreja.com", password: bcrypt.hashSync("123456", 10), role: "admin" },
     { id: 2, name: "Mídia", email: "midia@igreja.com", password: bcrypt.hashSync("123456", 10), role: "media" },
-    { id: 3, name: "Secretaria", email: "secretaria@igreja.com", password: bcrypt.hashSync("123456", 10), role: "secretaria" }
+    { id: 3, name: "Secretaria", email: "secretaria@igreja.com", password: bcrypt.hashSync("123456", 10), role: "secretaria" },
+    { id: 4, name: "Membro da Igreja", email: "membro@igreja.com", password: bcrypt.hashSync("123456", 10), role: "member" }
   ];
 }
 function ensureUsers(){
@@ -41,6 +46,7 @@ function ensureUsers(){
     if(email === "admin@igreja.com") return { ...u, name:"Pr. Daniel", role:"admin" };
     if(email === "midia@igreja.com") return { ...u, name:"Mídia", role:"media" };
     if(email === "secretaria@igreja.com") return { ...u, name:"Secretaria", role:"secretaria" };
+    if(email === "membro@igreja.com") return { ...u, name:"Membro da Igreja", role:"member" };
     return u;
   });
   fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
@@ -51,6 +57,17 @@ function readUsers(){ return JSON.parse(fs.readFileSync(usersFile)); }
 function saveUsers(users){ fs.writeFileSync(usersFile, JSON.stringify(users, null, 2)); }
 function readPosts(){ try { return JSON.parse(fs.readFileSync(postsFile)); } catch(e){ return []; } }
 function savePosts(posts){ fs.writeFileSync(postsFile, JSON.stringify(posts, null, 2)); }
+function readCourses(){ try { return JSON.parse(fs.readFileSync(coursesFile)); } catch(e){ return []; } }
+function saveCourses(courses){ fs.writeFileSync(coursesFile, JSON.stringify(courses, null, 2)); }
+function readAttendance(){ try { return JSON.parse(fs.readFileSync(attendanceFile)); } catch(e){ return []; } }
+function saveAttendance(records){ fs.writeFileSync(attendanceFile, JSON.stringify(records, null, 2)); }
+function findCourseAndLesson(courseId, lessonId){
+  const courses = readCourses();
+  const course = courses.find(c => Number(c.id) === Number(courseId));
+  if(!course) return { courses, course:null, lesson:null };
+  const lesson = (course.lessons || []).find(a => Number(a.id) === Number(lessonId));
+  return { courses, course, lesson };
+}
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -184,6 +201,12 @@ function canPublish(req, res, next){
   res.redirect("/login.html");
 }
 
+
+function loggedOnly(req, res, next){
+  if (req.session.user) return next();
+  res.redirect("/login.html");
+}
+
 function mediaOnly(req, res, next){
   if (req.session.user && req.session.user.role === "media") return next();
   if (req.session.user && req.session.user.role === "admin") return res.redirect("/admin.html");
@@ -204,6 +227,8 @@ app.get("/midias.html", (req,res)=>res.redirect("/midia.html"));
 app.get("/area-midia.html", mediaOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "area-midia.html")));
 app.get("/area-secretaria.html", secretariaOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "area-secretaria.html")));
 app.get("/admin.html", adminOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "admin.html")));
+app.get("/presencas.html", adminOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "presencas.html")));
+app.get("/cursos.html", loggedOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "cursos.html")));
 
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -217,7 +242,7 @@ app.post("/login", async (req, res) => {
   if (!valid) return res.send(errorPage("Senha incorreta.", "/login.html"));
   req.session.user = { id:user.id, name:user.name, email:user.email, role:user.role };
   req.session.save(() => {
-    res.redirect(user.role === 'admin' ? '/admin.html' : user.role === 'secretaria' ? '/area-secretaria.html' : '/area-midia.html');
+    res.redirect(user.role === 'admin' ? '/admin.html' : user.role === 'secretaria' ? '/area-secretaria.html' : user.role === 'media' ? '/area-midia.html' : '/cursos.html');
   });
 });
 
@@ -228,7 +253,7 @@ app.get("/api/me", (req,res)=>{
 
 app.get("/login.html", (req,res)=>{
   if(req.session.user){
-    return res.redirect(req.session.user.role === "admin" ? "/admin.html" : req.session.user.role === "secretaria" ? "/area-secretaria.html" : "/area-midia.html");
+    return res.redirect(req.session.user.role === "admin" ? "/admin.html" : req.session.user.role === "secretaria" ? "/area-secretaria.html" : req.session.user.role === "media" ? "/area-midia.html" : "/cursos.html");
   }
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
@@ -335,15 +360,129 @@ app.post("/edit-post/:id", canPublish, (req,res)=>{
   res.redirect(back);
 });
 
+
+app.get("/api/courses", loggedOnly, (req,res)=>{
+  res.set("Cache-Control", "no-store");
+  res.json(readCourses());
+});
+
+app.post("/course", adminOnly, (req,res)=>{
+  const title = (req.body.title || "").trim();
+  const description = (req.body.description || "").trim();
+  if(!title) return res.send(errorPage("Digite o título do curso.", "/admin.html"));
+  const courses = readCourses();
+  courses.unshift({
+    id: Date.now(),
+    title, description,
+    lessons: [],
+    createdAt: new Date().toISOString()
+  });
+  saveCourses(courses);
+  res.redirect("/admin.html");
+});
+
+
+app.post("/lesson", adminOnly, (req,res)=>{
+  const courseId = Number(req.body.courseId);
+  const lessonTitle = (req.body.lessonTitle || "").trim();
+  const lessonDescription = (req.body.lessonDescription || "").trim();
+  const videoUrl = (req.body.videoUrl || "").trim();
+  const materialUrl = (req.body.materialUrl || "").trim();
+  if(!courseId) return res.send(errorPage("Selecione o curso da aula.", "/admin.html"));
+  if(!lessonTitle) return res.send(errorPage("Digite o título da aula.", "/admin.html"));
+  const courses = readCourses();
+  const course = courses.find(c => Number(c.id) === courseId);
+  if(!course) return res.send(errorPage("Curso não encontrado.", "/admin.html"));
+  if(!Array.isArray(course.lessons)) course.lessons = [];
+  course.lessons.push({
+    id: Date.now(),
+    title: lessonTitle,
+    description: lessonDescription,
+    videoUrl,
+    materialUrl,
+    createdAt: new Date().toISOString()
+  });
+  saveCourses(courses);
+  res.redirect("/admin.html");
+});
+
+app.post("/course/:id/lesson", adminOnly, (req,res)=>{
+  const courseId = Number(req.params.id);
+  const lessonTitle = (req.body.lessonTitle || "").trim();
+  const lessonDescription = (req.body.lessonDescription || "").trim();
+  const videoUrl = (req.body.videoUrl || "").trim();
+  const materialUrl = (req.body.materialUrl || "").trim();
+  if(!lessonTitle) return res.send(errorPage("Digite o título da aula.", "/admin.html"));
+  const courses = readCourses();
+  const course = courses.find(c => Number(c.id) === courseId);
+  if(!course) return res.send(errorPage("Curso não encontrado.", "/admin.html"));
+  if(!Array.isArray(course.lessons)) course.lessons = [];
+  course.lessons.push({
+    id: Date.now(),
+    title: lessonTitle,
+    description: lessonDescription,
+    videoUrl,
+    materialUrl,
+    createdAt: new Date().toISOString()
+  });
+  saveCourses(courses);
+  res.redirect("/admin.html");
+});
+
+app.post("/delete-lesson/:courseId/:lessonId", adminOnly, (req,res)=>{
+  const courseId = Number(req.params.courseId);
+  const lessonId = Number(req.params.lessonId);
+  const courses = readCourses();
+  const course = courses.find(c => Number(c.id) === courseId);
+  if(course && Array.isArray(course.lessons)){
+    course.lessons = course.lessons.filter(a => Number(a.id) !== lessonId);
+    saveCourses(courses);
+  }
+  res.redirect("/admin.html");
+});
+
+app.post("/delete-course/:id", adminOnly, (req,res)=>{
+  const id = Number(req.params.id);
+  saveCourses(readCourses().filter(c => Number(c.id) !== id));
+  saveAttendance(readAttendance().filter(r => Number(r.courseId) !== id));
+  res.redirect("/admin.html");
+});
+
+app.post("/attendance", loggedOnly, (req,res)=>{
+  const courseId = Number(req.body.courseId);
+  const lessonId = Number(req.body.lessonId);
+  const studentName = (req.body.studentName || "").trim();
+  if(!studentName || studentName.length < 3) return res.send(errorPage("Digite seu nome completo para registrar presença.", "/cursos.html"));
+  const { course, lesson } = findCourseAndLesson(courseId, lessonId);
+  if(!course || !lesson) return res.send(errorPage("Curso ou aula não encontrado.", "/cursos.html"));
+  const records = readAttendance();
+  records.unshift({
+    id: Date.now(),
+    courseId, lessonId,
+    courseTitle: course.title,
+    lessonTitle: lesson.title,
+    studentName,
+    userEmail: req.session.user.email,
+    createdAt: new Date().toISOString()
+  });
+  saveAttendance(records);
+  res.redirect("/cursos.html?presenca=ok");
+});
+
+app.get("/api/attendance", adminOnly, (req,res)=>{
+  res.set("Cache-Control", "no-store");
+  res.json(readAttendance());
+});
+
 app.post("/alterar-senha", adminOnly, async (req,res)=>{
   const { emailAlvo, senhaAtual, novaSenha, confirmarSenha } = req.body;
-  const alvoPermitido = ["admin@igreja.com", "midia@igreja.com", "secretaria@igreja.com"].includes(String(emailAlvo || "").toLowerCase());
+  const alvoPermitido = ["admin@igreja.com", "midia@igreja.com", "secretaria@igreja.com", "membro@igreja.com"].includes(String(emailAlvo || "").toLowerCase());
 
   if(!emailAlvo || !senhaAtual || !novaSenha || !confirmarSenha) {
     return res.send(errorPage("Preencha todos os campos.", "/admin.html"));
   }
   if(!alvoPermitido) {
-    return res.send(errorPage("Você só pode alterar a senha do admin, da mídia ou da secretaria.", "/admin.html"));
+    return res.send(errorPage("Você só pode alterar a senha do admin, da mídia, da secretaria ou do acesso de membros.", "/admin.html"));
   }
   if(novaSenha !== confirmarSenha) {
     return res.send(errorPage("A nova senha e a confirmação não conferem.", "/admin.html"));
@@ -366,7 +505,7 @@ app.post("/alterar-senha", adminOnly, async (req,res)=>{
   saveUsers(users);
 
   const emailNormalizado = String(emailAlvo).toLowerCase();
-  const nomeAlvo = emailNormalizado === "admin@igreja.com" ? "admin" : emailNormalizado === "secretaria@igreja.com" ? "secretaria" : "mídia";
+  const nomeAlvo = emailNormalizado === "admin@igreja.com" ? "admin" : emailNormalizado === "secretaria@igreja.com" ? "secretaria" : emailNormalizado === "membro@igreja.com" ? "membro" : "mídia";
   req.session.destroy(()=>res.send(successPage("Senha alterada com sucesso!", `A senha do login ${nomeAlvo} foi alterada. Faça login novamente.`, "/login.html", "Entrar novamente")));
 });
 

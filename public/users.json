@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "name": "Pr. Daniel",
+    "email": "admin@igreja.com",
+    "password": "$2a$10$jcE2V/p7pxzwXWiWKLSxG.iX2rthd6Xv4sIbqTXnf4LxnJlfAWlYK",
+    "role": "admin"
+  },
+  {
+    "id": 2,
+    "name": "Mídia",
+    "email": "midia@igreja.com",
+    "password": "$2a$10$3Qrur4uyoOFrp0NdrMdh7utm6PwgorhAJM8J92PUlH3RPpmMHf8mS",
+    "role": "media"
+  },
+  {
+    "id": 3,
+    "name": "Secretaria",
+    "email": "secretaria@igreja.com",
+    "password": "$2a$10$XhDG7vS625wUd5Kx4adhket3bjFonaylxt6Dh5zQJaTnUXzWyKqie",
+    "role": "secretaria"
+  },
+  {
+    "id": 4,
+    "name": "Membro da Igreja",
+    "email": "membro@igreja.com",
+    "password": "$2a$10$pAZFya9F1P7wnKkdjTo76uAPf6W8l90.QcMp9Au/.nq8opN.c7XXG",
+    "role": "member"
+  }
+]

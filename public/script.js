@@ -1,3 +1,8 @@
+const usuarioLogado = localStorage.getItem("usuarioLogado");
+if (window.location.pathname.includes("cursos.html") && !usuarioLogado) {
+  window.location.href = "login.html";
+}
+
 function toggleMenu(){
   const menu=document.getElementById('menu');
   if(menu) menu.classList.toggle('open');

@@ -15,9 +15,11 @@
         <a href="index.html">Início</a>
         <a href="midia.html">Mídia</a>
         <a href="estudos-pr-daniel.html">Estudos Pr. Daniel</a>
+        <a href="cursos.html">Cursos</a>
         <a href="publicacoes.html">Publicações</a>
         <a href="contato.html">Contato</a>
         <a class="active" href="admin.html">Painel</a>
+        <a href="presencas.html">Presenças</a>
         <a href="/logout">Sair</a>
       </nav>
     </div>
@@ -39,6 +41,29 @@
         </form>
       </div>
       <div class="panel">
+        <form action="/course" method="POST">
+          <h2>Novo curso para membros</h2>
+          <p class="helper">Crie o curso principal. Depois, na lista abaixo, adicione quantas aulas quiser dentro dele.</p>
+          <input type="text" name="title" placeholder="Título do curso. Ex: Curso de Batismo" required>
+          <textarea name="description" placeholder="Descrição do curso"></textarea>
+          <button type="submit">Criar curso</button>
+        </form>
+      </div>
+      <div class="panel">
+        <form action="/lesson" method="POST">
+          <h2>Adicionar aula</h2>
+          <p class="helper">Selecione o curso e cadastre quantas aulas forem necessárias dentro dele.</p>
+          <select name="courseId" id="lesson-course-select" required>
+            <option value="">Selecione o curso</option>
+          </select>
+          <input type="text" name="lessonTitle" placeholder="Título da aula. Ex: Aula 1 - Introdução" required>
+          <textarea name="lessonDescription" placeholder="Descrição da aula"></textarea>
+          <input type="url" name="videoUrl" placeholder="Link do vídeo: YouTube, Vimeo ou Google Drive">
+          <input type="url" name="materialUrl" placeholder="Link do PDF ou material de apoio">
+          <button type="submit">Adicionar aula no curso selecionado</button>
+        </form>
+      </div>
+      <div class="panel">
         <form action="/alterar-senha" method="POST">
           <h2>Alterar senha dos logins</h2>
           <p class="helper">Somente o administrador pode trocar a senha do admin, da mídia ou da secretaria.</p>
@@ -46,6 +71,7 @@
             <option value="admin@igreja.com">Admin - Pr. Daniel</option>
             <option value="midia@igreja.com">Mídia</option>
             <option value="secretaria@igreja.com">Secretaria</option>
+            <option value="membro@igreja.com">Acesso de Membros</option>
           </select>
           <input type="password" name="senhaAtual" placeholder="Senha atual do admin" required>
           <input type="password" name="novaSenha" placeholder="Nova senha" required>
@@ -54,6 +80,12 @@
         </form>
       </div>
     </div>
+
+    <section style="margin-top:45px">
+      <h2>Cursos cadastrados</h2>
+      <div id="admin-courses" class="course-admin-list"></div>
+    </section>
+
 
     <section style="margin-top:45px">
       <h2>Publicações cadastradas</h2>

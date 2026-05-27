@@ -1,7 +1,33 @@
-const usuarioLogado = localStorage.getItem("usuarioLogado");
-if (window.location.pathname.includes("cursos.html") && !usuarioLogado) {
+
+async function verificarAcessoCursos(){
+  if(!window.location.pathname.includes("cursos.html")) return true;
+
+  const usuarioLocal = localStorage.getItem("usuarioLogado");
+  if(usuarioLocal) return true;
+
+  try{
+    const res = await fetch('/api/me?ts=' + Date.now(), { cache: 'no-store' });
+    const data = await res.json();
+    if(data && data.logged){
+      localStorage.setItem("usuarioLogado", data.user?.role || "logado");
+      return true;
+    }
+  }catch(e){
+    // Se o site estiver sem backend, mantém a proteção pelo localStorage.
+  }
+
   window.location.href = "login.html";
+  return false;
 }
+
+document.addEventListener('click', (e)=>{
+  const link = e.target.closest('a[href="/logout"], a[href="logout"]');
+  if(link){
+    localStorage.removeItem("usuarioLogado");
+    localStorage.removeItem("usuarioNome");
+    localStorage.removeItem("usuarioEmail");
+  }
+});
 
 function toggleMenu(){
   const menu=document.getElementById('menu');
@@ -281,6 +307,8 @@ async function buscarPresencas(){
 async function carregarCursos(){
   const area=document.getElementById('courses');
   if(!area) return;
+  const acessoOk = await verificarAcessoCursos();
+  if(!acessoOk) return;
   if(!dbReady()){ area.innerHTML=dbErrorMsg(); return; }
   try{
     const courses=await buscarCursosComAulas();

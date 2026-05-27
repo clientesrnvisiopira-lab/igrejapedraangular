@@ -47,7 +47,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if(email === "membro@igreja.com" && password === "123456"){
       e.preventDefault();
-      localStorage.setItem("usuarioLogado", "membro");
+      localStorage.setItem("usuarioLogado", "member");
+      localStorage.setItem("usuarioEmail", "membro@igreja.com");
+      localStorage.setItem("usuarioNome", "Membro da Igreja");
       window.location.href = "cursos.html";
     }
   });

@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector("form");
 
   form.addEventListener("submit", async (e) => {
+    e.preventDefault();
     const email = form.querySelector('input[name="email"]').value;
     const password = form.querySelector('input[name="password"]').value;
 
@@ -51,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.setItem("usuarioEmail", "membro@igreja.com");
       localStorage.setItem("usuarioNome", "Membro da Igreja");
       window.location.href = "cursos.html";
+      return;
     }
   });
 });

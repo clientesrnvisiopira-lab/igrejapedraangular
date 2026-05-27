@@ -36,6 +36,24 @@
   </main>
 <footer class="site-footer"><p>Igreja do Evangelho Pedra Angular • Todos os direitos reservados.</p>
   <p>Site desenvolvido por RN Vision Pira.</p></footer>
+  
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.querySelector("form");
+
+  form.addEventListener("submit", async (e) => {
+    const email = form.querySelector('input[name="email"]').value;
+    const password = form.querySelector('input[name="password"]').value;
+
+    if(email === "membro@igreja.com" && password === "123456"){
+      e.preventDefault();
+      localStorage.setItem("usuarioLogado", "membro");
+      window.location.href = "cursos.html";
+    }
+  });
+});
+</script>
+
   <script src="script.js"></script>
 </body>
 </html>

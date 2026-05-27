@@ -214,13 +214,71 @@ function youtubeEmbed(url){
   return id ? `https://www.youtube.com/embed/${id}` : '';
 }
 
+
+function dbReady(){
+  return typeof supabaseClient !== 'undefined' && supabaseClient;
+}
+function dbErrorMsg(){
+  return '<div class="panel center"><h2>Supabase não configurado</h2><p>Abra o arquivo <strong>supabase-config.js</strong> e cole a sua chave <strong>Publishable key</strong>.</p></div>';
+}
+
+async function buscarCursosComAulas(){
+  if(!dbReady()) throw new Error('Supabase não configurado');
+  const { data: courses, error: cErr } = await supabaseClient
+    .from('courses')
+    .select('*')
+    .order('created_at', { ascending:false });
+  if(cErr) throw cErr;
+
+  const { data: lessons, error: lErr } = await supabaseClient
+    .from('lessons')
+    .select('*')
+    .order('created_at', { ascending:true });
+  if(lErr) throw lErr;
+
+  return (courses || []).map(c => ({
+    id: c.id,
+    title: c.title,
+    description: c.description,
+    createdAt: c.created_at,
+    lessons: (lessons || [])
+      .filter(a => String(a.course_id) === String(c.id))
+      .map(a => ({
+        id: a.id,
+        courseId: a.course_id,
+        title: a.title,
+        description: a.description || '',
+        videoUrl: a.video_url || '',
+        materialUrl: a.material_url || '',
+        createdAt: a.created_at
+      }))
+  }));
+}
+
+async function buscarPresencas(){
+  if(!dbReady()) throw new Error('Supabase não configurado');
+  const { data, error } = await supabaseClient
+    .from('attendance')
+    .select('id, student_name, created_at, course_id, lesson_id, courses(title), lessons(title)')
+    .order('created_at', { ascending:false });
+  if(error) throw error;
+  return (data || []).map(r => ({
+    id: r.id,
+    studentName: r.student_name,
+    createdAt: r.created_at,
+    courseId: r.course_id,
+    lessonId: r.lesson_id,
+    courseTitle: r.courses?.title || 'Curso sem nome',
+    lessonTitle: r.lessons?.title || 'Aula sem nome'
+  }));
+}
+
 async function carregarCursos(){
   const area=document.getElementById('courses');
   if(!area) return;
+  if(!dbReady()){ area.innerHTML=dbErrorMsg(); return; }
   try{
-    const res=await fetch('/api/courses?ts=' + Date.now(), { cache:'no-store' });
-    if(res.status === 401 || res.redirected) { location.href='/login.html'; return; }
-    const courses=await res.json();
+    const courses=await buscarCursosComAulas();
     if(!courses.length){
       area.innerHTML='<div class="panel center"><h2>Nenhum curso cadastrado ainda</h2><p>Quando o pastor publicar um curso pelo Painel Administrativo, ele aparecerá aqui para os membros logados.</p></div>';
       return;
@@ -243,9 +301,7 @@ async function carregarCursos(){
             ${video}
             <p>${escapeHtml(a.description||'')}</p>
             <div class="course-actions">${videoBtn}${materialBtn}</div>
-            <form action="/attendance" method="POST" class="attendance-form">
-              <input type="hidden" name="courseId" value="${c.id}">
-              <input type="hidden" name="lessonId" value="${a.id}">
+            <form class="attendance-form" data-course-id="${c.id}" data-lesson-id="${a.id}">
               <label>Registrar presença nesta aula</label>
               <div class="attendance-row">
                 <input type="text" name="studentName" placeholder="Digite seu nome completo" required>
@@ -257,8 +313,10 @@ async function carregarCursos(){
       }).join('') : '<p class="helper">Este curso ainda não possui aulas cadastradas.</p>';
       return `<article class="course-box collapsed"><button type="button" class="course-toggle" onclick="toggleCourse(this)"><div><small>Curso ${courseIndex+1}</small><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.description||'')}</p></div><span>Ver aulas</span></button><div class="lessons-list">${lessonsHtml}</div></article>`;
     }).join('');
+    configurarFormsPresenca();
   }catch(e){
-    area.innerHTML='<div class="panel center"><h2>Não foi possível carregar os cursos.</h2><p>Verifique se o servidor está iniciado.</p></div>';
+    console.error(e);
+    area.innerHTML='<div class="panel center"><h2>Não foi possível carregar os cursos.</h2><p>Verifique a chave do Supabase e as permissões das tabelas.</p></div>';
   }
 }
 
@@ -278,13 +336,45 @@ function toggleLesson(btn){
   if(icon) icon.textContent = card.classList.contains('collapsed') ? '+' : '−';
 }
 
+function configurarFormsPresenca(){
+  document.querySelectorAll('.attendance-form').forEach(form => {
+    if(form.dataset.ready) return;
+    form.dataset.ready='1';
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      if(!dbReady()) return alert('Supabase não configurado.');
+      const btn=form.querySelector('button');
+      const original=btn.textContent;
+      btn.disabled=true; btn.textContent='Salvando...';
+      try{
+        const studentName=form.querySelector('[name="studentName"]').value.trim();
+        const { error } = await supabaseClient.from('attendance').insert({
+          course_id: form.dataset.courseId,
+          lesson_id: form.dataset.lessonId,
+          student_name: studentName
+        });
+        if(error) throw error;
+        form.reset();
+        const msg=document.getElementById('attendance-message');
+        if(msg) msg.innerHTML='<div class="panel center presence-ok"><strong>Presença registrada com sucesso!</strong></div>';
+        alert('Presença registrada com sucesso!');
+      }catch(err){
+        console.error(err);
+        alert('Erro ao registrar presença. Verifique a conexão com o Supabase.');
+      }finally{
+        btn.disabled=false; btn.textContent=original;
+      }
+    });
+  });
+}
+
 async function carregarCursosAdmin(){
   const area=document.getElementById('admin-courses');
   const select=document.getElementById('lesson-course-select');
   if(!area && !select) return;
+  if(!dbReady()){ if(area) area.innerHTML=dbErrorMsg(); return; }
   try{
-    const res=await fetch('/api/courses?ts=' + Date.now(), { cache:'no-store' });
-    const courses=await res.json();
+    const courses=await buscarCursosComAulas();
     if(select){
       select.innerHTML = '<option value="">Selecione o curso</option>' + courses.map(c=>`<option value="${c.id}">${escapeHtml(c.title)}</option>`).join('');
     }
@@ -292,36 +382,93 @@ async function carregarCursosAdmin(){
     if(!courses.length){ area.innerHTML='<div class="panel center"><p>Nenhum curso cadastrado.</p></div>'; return; }
     area.innerHTML=courses.map(c=>{
       const lessons=Array.isArray(c.lessons) ? c.lessons : [];
-      const lessonList = lessons.length ? lessons.map((a,i)=>`<div class="admin-lesson"><strong>Aula ${i+1}: ${escapeHtml(a.title)}</strong><p>${escapeHtml(a.description||'')}</p><div class="course-actions">${a.videoUrl ? `<a class="btn" href="${escapeHtml(a.videoUrl)}" target="_blank">Ver vídeo</a>` : ''}${a.materialUrl ? `<a class="btn secondary" href="${escapeHtml(a.materialUrl)}" target="_blank">Ver material</a>` : ''}</div><form action="/delete-lesson/${c.id}/${a.id}" method="POST" onsubmit="return confirm('Excluir esta aula?')"><button type="submit" class="danger">Excluir aula</button></form></div>`).join('') : '<p class="helper">Nenhuma aula cadastrada neste curso.</p>';
-      return `<article class="panel course-admin-card"><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.description||'')}</p><div class="lessons-admin"><h4>Aulas cadastradas</h4>${lessonList}</div><form action="/delete-course/${c.id}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este curso e suas aulas?')"><button type="submit" class="danger">Excluir curso inteiro</button></form></article>`;
+      const lessonList = lessons.length ? lessons.map((a,i)=>`<div class="admin-lesson"><strong>Aula ${i+1}: ${escapeHtml(a.title)}</strong><p>${escapeHtml(a.description||'')}</p><div class="course-actions">${a.videoUrl ? `<a class="btn" href="${escapeHtml(a.videoUrl)}" target="_blank">Ver vídeo</a>` : ''}${a.materialUrl ? `<a class="btn secondary" href="${escapeHtml(a.materialUrl)}" target="_blank">Ver material</a>` : ''}</div><button type="button" class="danger" onclick="excluirAulaSupabase('${a.id}')">Excluir aula</button></div>`).join('') : '<p class="helper">Nenhuma aula cadastrada neste curso.</p>';
+      return `<article class="panel course-admin-card"><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.description||'')}</p><div class="lessons-admin"><h4>Aulas cadastradas</h4>${lessonList}</div><button type="button" class="danger" onclick="excluirCursoSupabase('${c.id}')">Excluir curso inteiro</button></article>`;
     }).join('');
   }catch(e){
+    console.error(e);
     if(area) area.innerHTML='<div class="panel center"><p>Não foi possível carregar os cursos.</p></div>';
   }
 }
 
-carregarPosts();
-carregarCursos();
-carregarCursosAdmin();
-carregarPostsAdmin();
-carregarPostsMidia();
+async function excluirCursoSupabase(id){
+  if(!confirm('Tem certeza que deseja excluir este curso e suas aulas?')) return;
+  const { error } = await supabaseClient.from('courses').delete().eq('id', id);
+  if(error) return alert('Erro ao excluir curso.');
+  await carregarCursosAdmin();
+  await carregarCursos();
+}
+
+async function excluirAulaSupabase(id){
+  if(!confirm('Excluir esta aula?')) return;
+  const { error } = await supabaseClient.from('lessons').delete().eq('id', id);
+  if(error) return alert('Erro ao excluir aula.');
+  await carregarCursosAdmin();
+  await carregarCursos();
+}
+
+function configurarFormsCursosAdmin(){
+  const courseForm=document.querySelector('form[action="/course"]');
+  if(courseForm){
+    courseForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      if(!dbReady()) return alert('Supabase não configurado.');
+      const btn=courseForm.querySelector('button');
+      const original=btn.textContent;
+      btn.disabled=true; btn.textContent='Criando...';
+      try{
+        const title=courseForm.querySelector('[name="title"]').value.trim();
+        const description=courseForm.querySelector('[name="description"]').value.trim();
+        const { error } = await supabaseClient.from('courses').insert({ title, description });
+        if(error) throw error;
+        courseForm.reset();
+        await carregarCursosAdmin();
+        alert('Curso criado com sucesso!');
+      }catch(err){ console.error(err); alert('Erro ao criar curso. Verifique o Supabase.'); }
+      finally{ btn.disabled=false; btn.textContent=original; }
+    });
+  }
+
+  const lessonForm=document.querySelector('form[action="/lesson"]');
+  if(lessonForm){
+    lessonForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      if(!dbReady()) return alert('Supabase não configurado.');
+      const btn=lessonForm.querySelector('button');
+      const original=btn.textContent;
+      btn.disabled=true; btn.textContent='Adicionando...';
+      try{
+        const course_id=lessonForm.querySelector('[name="courseId"]').value;
+        const title=lessonForm.querySelector('[name="lessonTitle"]').value.trim();
+        const description=lessonForm.querySelector('[name="lessonDescription"]').value.trim();
+        const video_url=lessonForm.querySelector('[name="videoUrl"]').value.trim();
+        const material_url=lessonForm.querySelector('[name="materialUrl"]').value.trim();
+        if(!course_id) throw new Error('Selecione um curso.');
+        const payload={ course_id, title, video_url, material_url };
+        if(description) payload.description = description;
+        const { error } = await supabaseClient.from('lessons').insert(payload);
+        if(error) throw error;
+        lessonForm.reset();
+        await carregarCursosAdmin();
+        alert('Aula adicionada com sucesso!');
+      }catch(err){ console.error(err); alert(err.message || 'Erro ao adicionar aula.'); }
+      finally{ btn.disabled=false; btn.textContent=original; }
+    });
+  }
+}
 
 async function carregarPresencasAdmin(){
   const area=document.getElementById('admin-attendance');
   if(!area) return;
+  if(!dbReady()){ area.innerHTML=dbErrorMsg(); return; }
   try{
-    const res=await fetch('/api/attendance?ts=' + Date.now(), { cache:'no-store' });
-    const records=await res.json();
+    const records=await buscarPresencas();
     if(!records.length){ area.innerHTML='<div class="panel center"><p>Nenhuma presença registrada ainda.</p></div>'; return; }
     area.innerHTML=`<div class="attendance-table"><table><thead><tr><th>Aluno</th><th>Curso</th><th>Aula</th><th>Data/Hora</th></tr></thead><tbody>${records.map(r=>`<tr><td>${escapeHtml(r.studentName)}</td><td>${escapeHtml(r.courseTitle)}</td><td>${escapeHtml(r.lessonTitle)}</td><td>${new Date(r.createdAt).toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table></div>`;
   }catch(e){
     area.innerHTML='<div class="panel center"><p>Não foi possível carregar a lista de presença.</p></div>';
   }
 }
-
-carregarPostsSecretaria();
-carregarPresencasAdmin();
-if(document.getElementById('feed')) setInterval(carregarPosts, 10000);
 
 async function ajustarMenuLogado(){
   const menu=document.getElementById('menu');
@@ -351,19 +498,13 @@ async function ajustarMenuLogado(){
   }catch(e){}
 }
 
-ajustarMenuLogado();
-
 async function carregarPresencasPorCurso(){
   const area=document.getElementById('admin-attendance-by-course');
   const filter=document.getElementById('attendance-course-filter');
   if(!area) return;
+  if(!dbReady()){ area.innerHTML=dbErrorMsg(); return; }
   try{
-    const [attendanceRes, coursesRes]=await Promise.all([
-      fetch('/api/attendance?ts=' + Date.now(), { cache:'no-store' }),
-      fetch('/api/courses?ts=' + Date.now(), { cache:'no-store' })
-    ]);
-    const records=await attendanceRes.json();
-    const courses=await coursesRes.json();
+    const [records, courses]=await Promise.all([buscarPresencas(), buscarCursosComAulas()]);
 
     if(filter && !filter.dataset.loaded){
       filter.innerHTML = '<option value="">Todos os cursos</option>' + courses.map(c=>`<option value="${c.id}">${escapeHtml(c.title)}</option>`).join('');
@@ -397,8 +538,19 @@ async function carregarPresencasPorCurso(){
       return `<article class="panel attendance-course-block"><h3>${escapeHtml(course.title)}</h3><p class="helper">Total registrado neste curso: <strong>${totalCurso}</strong> presença(s).</p>${lessonsHtml}</article>`;
     }).join('');
   }catch(e){
+    console.error(e);
     area.innerHTML='<div class="panel center"><p>Não foi possível carregar as presenças por curso.</p></div>';
   }
 }
 
+carregarPosts();
+carregarPostsAdmin();
+carregarPostsMidia();
+carregarPostsSecretaria();
+carregarCursos();
+carregarCursosAdmin();
+configurarFormsCursosAdmin();
+carregarPresencasAdmin();
+ajustarMenuLogado();
 carregarPresencasPorCurso();
+if(document.getElementById('feed')) setInterval(carregarPosts, 10000);

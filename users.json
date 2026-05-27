@@ -19,5 +19,12 @@
     "email": "secretaria@igreja.com",
     "password": "$2a$10$XhDG7vS625wUd5Kx4adhket3bjFonaylxt6Dh5zQJaTnUXzWyKqie",
     "role": "secretaria"
+  },
+  {
+    "id": 4,
+    "name": "Membro da Igreja",
+    "email": "membro@igreja.com",
+    "password": "$2a$10$pAZFya9F1P7wnKkdjTo76uAPf6W8l90.QcMp9Au/.nq8opN.c7XXG",
+    "role": "member"
   }
 ]

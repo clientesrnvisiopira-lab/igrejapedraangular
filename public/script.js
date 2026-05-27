@@ -2,7 +2,7 @@
 async function verificarAcessoCursos(){
   if(!window.location.pathname.includes("cursos.html")) return true;
 
-  const usuarioLocal = localStorage.getItem("usuarioLogado") || sessionStorage.getItem("usuarioLogado");
+  const usuarioLocal = localStorage.getItem("usuarioLogado");
   if(usuarioLocal) return true;
 
   try{

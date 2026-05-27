@@ -7,6 +7,7 @@ const path = require("path");
 const https = require("https");
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
 // SUPABASE - tudo permanente no banco de dados
@@ -231,7 +232,27 @@ async function deleteFromCloudinary(post){
   try{ await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/destroy`, { method:"POST", body }); }catch(e){ console.warn("Não foi possível excluir do Cloudinary:", e.message); }
 }
 
-function canPublish(req, res, next){ if (req.session.user && ["admin","media","secretaria"].includes(req.session.user.role)) return next(); res.redirect("/login.html"); }
+function roleFromRequest(req){
+  if(req.session && req.session.user && req.session.user.role) return req.session.user.role;
+  const area = String(req.body?.postArea || req.body?.category || "").toLowerCase();
+  if(["admin","media","secretaria"].includes(area)) return area;
+  const ref = String(req.get("referer") || "").toLowerCase();
+  if(ref.includes("area-midia")) return "media";
+  if(ref.includes("area-secretaria")) return "secretaria";
+  if(ref.includes("admin")) return "admin";
+  return null;
+}
+function backByRole(role){
+  if(role === "admin") return "/admin.html";
+  if(role === "secretaria") return "/area-secretaria.html";
+  if(role === "media") return "/area-midia.html";
+  return "/login.html";
+}
+function canPublish(req, res, next){
+  const role = roleFromRequest(req);
+  if (["admin","media","secretaria"].includes(role)) return next();
+  res.redirect("/login.html");
+}
 function loggedOnly(req, res, next){ if (req.session.user) return next(); res.redirect("/login.html"); }
 function mediaOnly(req, res, next){ if (req.session.user && req.session.user.role === "media") return next(); if (req.session.user && req.session.user.role === "admin") return res.redirect("/admin.html"); res.redirect("/login.html"); }
 function adminOnly(req, res, next){ if (req.session.user && req.session.user.role === "admin") return next(); res.redirect("/login.html"); }
@@ -274,15 +295,16 @@ app.get("/login.html", (req,res)=>{
 app.get("/logout", (req,res)=> req.session.destroy(()=>res.redirect("/login.html")) );
 
 app.post("/upload", canPublish, upload.single("media"), async (req, res) => {
-  const back = req.session.user.role === "admin" ? "/admin.html" : req.session.user.role === "secretaria" ? "/area-secretaria.html" : "/area-midia.html";
+  const role = roleFromRequest(req);
+  const back = backByRole(role);
   try{
     if(!req.file) return res.send(errorPage("Selecione uma imagem, vídeo ou áudio.", back));
     let type = "foto";
     if(req.file.mimetype.startsWith("video/")) type = "video";
     if(req.file.mimetype.startsWith("audio/")) type = "audio";
     const cloudinaryFile = await uploadToCloudinary(req.file);
-    const isAdmin = req.session.user.role === "admin";
-    const isSecretaria = req.session.user.role === "secretaria";
+    const isAdmin = role === "admin";
+    const isSecretaria = role === "secretaria";
     const author = isAdmin ? "Pr. Daniel" : isSecretaria ? "Secretaria" : "Mídia";
     const category = isAdmin ? "admin" : isSecretaria ? "secretaria" : "media";
     await insertPost({
@@ -302,7 +324,7 @@ app.post("/upload", canPublish, upload.single("media"), async (req, res) => {
   }catch(e){ return res.status(400).send(errorPage(e.message || "Erro ao enviar arquivo.", back)); }
 });
 app.use((err, req, res, next) => {
-  if(err){ const role = req.session?.user?.role; const back = role === "admin" ? "/admin.html" : role === "secretaria" ? "/area-secretaria.html" : role === "media" ? "/area-midia.html" : "/login.html"; return res.status(400).send(errorPage(err.message || "Erro ao enviar arquivo.", back)); }
+  if(err){ const role = roleFromRequest(req); const back = backByRole(role); return res.status(400).send(errorPage(err.message || "Erro ao enviar arquivo.", back)); }
   next();
 });
 

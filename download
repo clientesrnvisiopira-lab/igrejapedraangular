@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="topbar">
+      <a class="brand" href="index.html"><img src="assets/logo-pedra-angular.png" alt="Igreja Pedra Angular"></a>
+      <button class="menu-btn" onclick="toggleMenu()" aria-label="Abrir menu">☰</button>
+      <nav class="menu" id="menu">
+        <a href="index.html">Início</a>
+        <a href="midia.html">Mídia</a>
+        <a href="estudos-pr-daniel.html">Estudos Pr. Daniel</a>
+        <a href="cursos.html">Cursos</a>
+        <a href="publicacoes.html">Publicações</a>
+        <a href="contato.html">Contato</a>
+        <a class="active" href="login.html">Login</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container narrow">
+    <div class="panel login-box">
+      <form action="/login" method="POST">
+        <h1>Área de acesso</h1>
+        <p>Acesse com seu login para entrar na área correspondente da igreja.</p>
+        <input type="email" name="email" placeholder="E-mail" required>
+        <input type="password" name="password" placeholder="Senha" required>
+        <button type="submit">Entrar</button>
+        
+      </form>
+    </div>
+  </main>
+<footer class="site-footer"><p>Igreja do Evangelho Pedra Angular • Todos os direitos reservados.</p>
+  <p>Site desenvolvido por RN Vision Pira.</p></footer>
+  
+  <script src="script.js"></script>
+</body>
+</html>

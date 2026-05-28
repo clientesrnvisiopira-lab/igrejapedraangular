@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contato</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="topbar">
+      <a class="brand" href="index.html"><img src="assets/logo-pedra-angular.png" alt="Igreja Pedra Angular"></a>
+      <button class="menu-btn" onclick="toggleMenu()" aria-label="Abrir menu">☰</button>
+      <nav class="menu" id="menu">
+        <a href="index.html">Início</a>
+        <a href="midia.html">Mídia</a>
+        <a href="estudos-pr-daniel.html">Estudos Pr. Daniel</a>
+        <a href="cursos.html">Cursos</a>
+        <a href="publicacoes.html">Publicações</a>
+        <a class="active" href="contato.html">Contato</a>
+        <a href="login.html">Login</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="section-title">
+      <h1>Contato</h1>
+      <p>Entre em contato com a Igreja Pedra Angular, envie seu pedido de oração ou fale conosco pelo WhatsApp.</p>
+    </div>
+
+    <div class="contact-grid">
+      <div class="panel info-panel">
+        <h2>Informações da igreja</h2>
+        <p><strong>Endereço:</strong> Estr. da Jazida, 275 - Jardim Taiguara I, Piracicaba - SP, 13411-112.</p>
+        <p><strong>WhatsApp:</strong> (19) 99302-8571</p>
+        <p><strong>Cultos:</strong> Domingo às 19h</p>
+        <p><strong>Células:</strong>Terça-Feira às 20h  </p>
+        <p class="helper">Você é nosso convidado especial.</p>
+      </div>
+
+      <div class="panel" id="formulario-oracao">
+        <form id="whatsappForm">
+          <h2>Pedido de oração / Contato</h2>
+          <input type="text" id="nome" placeholder="Nome*" required>
+          <input type="text" id="sobrenome" placeholder="Sobrenome*" required>
+          <select id="membro" required>
+            <option value="">Sou membro da igreja?*</option>
+            <option value="Sou membro">Sou membro</option>
+            <option value="Não sou membro">Não sou membro</option>
+          </select>
+          <input type="tel" id="celular" placeholder="Celular*" maxlength="15" required>
+          <select id="assunto" required>
+            <option value="">Assunto*</option>
+            <option value="Pedido de oração">Pedido de oração</option>
+            <option value="Outros">Outros</option>
+          </select>
+          <textarea id="mensagem" placeholder="Mensagem*" required></textarea>
+          <button type="submit">Enviar pelo WhatsApp</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+ <footer class="site-footer"><p>Igreja do Evangelho Pedra Angular • Todos os direitos reservados.</p>
+  <p>Site desenvolvido por RN Vision Pira.</p></footer>
+  <script src="script.js"></script>
+</body>
+</html>

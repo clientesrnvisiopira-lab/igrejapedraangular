@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Área da Secretaria</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="topbar">
+      <a class="brand" href="index.html"><img src="assets/logo-pedra-angular.png" alt="Igreja Pedra Angular"></a>
+      <button class="menu-btn" onclick="toggleMenu()" aria-label="Abrir menu">☰</button>
+      <nav class="menu" id="menu">
+        <a href="index.html">Início</a>
+        <a href="midia.html">Mídia</a>
+        <a href="estudos-pr-daniel.html">Estudos Pr. Daniel</a>
+        <a href="cursos.html">Cursos</a>
+        <a href="publicacoes.html">Publicações</a>
+        <a class="active" href="area-secretaria.html">Área da Secretaria</a>
+        <a href="/logout">Sair</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    <div class="section-title">
+      <h1>Área da Secretaria</h1>
+      <p>Envie imagens, vídeos ou áudios dos cultos. Tudo que for publicado pelo login secretaria@igreja.com aparecerá automaticamente na página Publicações.</p>
+    </div>
+    <div class="panel upload-panel">
+      <form action="/upload" method="POST" enctype="multipart/form-data">
+        <h2>Adicionar imagem, vídeo ou áudio</h2>
+        <input type="hidden" name="postArea" value="secretaria">
+          <input type="text" name="title" placeholder="Legenda ou título" required>
+        <textarea name="description" placeholder="Descrição da publicação"></textarea>
+        <input type="file" name="media" accept="image/*,video/*,audio/*" required>
+        <button type="submit">Publicar na página Publicações</button>
+      </form>
+    </div>
+
+    <section style="margin-top:45px">
+      <h2>Minhas publicações da Secretaria</h2>
+      <p class="helper">Aqui a Secretaria pode alterar a legenda/descrição ou excluir as próprias publicações.</p>
+      <div id="secretaria-posts" class="cards"></div>
+    </section>
+  </main>
+<footer class="site-footer"><p>Igreja do Evangelho Pedra Angular • Todos os direitos reservados.</p>
+  <p>Site desenvolvido por RN Vision Pira.</p></footer>
+  <script src="script.js"></script>
+</body>
+</html>

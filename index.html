@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cursos para Membros</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="topbar">
+      <a class="brand" href="index.html"><img src="assets/logo-pedra-angular.png" alt="Igreja Pedra Angular"></a>
+      <button class="menu-btn" onclick="toggleMenu()" aria-label="Abrir menu">☰</button>
+      <nav class="menu" id="menu">
+        <a href="index.html">Início</a>
+        <a href="midia.html">Mídia</a>
+        <a href="estudos-pr-daniel.html">Estudos Pr. Daniel</a>
+        <a class="active" href="cursos.html">Cursos</a>
+        <a href="publicacoes.html">Publicações</a>
+        <a href="contato.html">Contato</a>
+        <a href="/logout">Sair</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    <div class="section-title">
+      <h1>Área de Cursos</h1>
+      <p>Conteúdos exclusivos para membros da Igreja Pedra Angular. Para acessar esta página é necessário estar logado.</p>
+    </div>
+    <div id="attendance-message"></div>
+    <div id="courses" class="courses-list"></div>
+  </main>
+  <footer class="site-footer"><p>Igreja do Evangelho Pedra Angular • Todos os direitos reservados.</p>
+  <p>Site desenvolvido por RN Vision Pira.</p></footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

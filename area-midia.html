@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Administrativo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="topbar">
+      <a class="brand" href="index.html"><img src="assets/logo-pedra-angular.png" alt="Igreja Pedra Angular"></a>
+      <button class="menu-btn" onclick="toggleMenu()" aria-label="Abrir menu">☰</button>
+      <nav class="menu" id="menu">
+        <a href="index.html">Início</a>
+        <a href="midia.html">Mídia</a>
+        <a href="estudos-pr-daniel.html">Estudos Pr. Daniel</a>
+        <a href="cursos.html">Cursos</a>
+        <a href="publicacoes.html">Publicações</a>
+        <a href="contato.html">Contato</a>
+        <a class="active" href="admin.html">Painel</a>
+        <a href="presencas.html">Presenças</a>
+        <a href="/logout">Sair</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    <div class="section-title">
+      <h1>Painel Administrativo</h1>
+      <p>Área do Pr. Daniel para publicar imagem, vídeo ou áudio na página Estudos Pr. Daniel, excluir arquivos e alterar a senha dos logins.</p>
+    </div>
+
+    <div class="admin-grid">
+      <div class="panel">
+        <form action="/upload" method="POST" enctype="multipart/form-data">
+          <h2>Nova publicação</h2>
+          <input type="hidden" name="postArea" value="admin">
+          <input type="text" name="title" placeholder="Título" required>
+          <textarea name="description" placeholder="Descrição"></textarea>
+          <input type="file" name="media" accept="image/*,video/*,audio/*" required>
+          <button type="submit">Publicar na página Estudos Pr. Daniel</button>
+        </form>
+      </div>
+      <div class="panel">
+        <form action="/course" method="POST">
+          <h2>Novo curso para membros</h2>
+          <p class="helper">Crie o curso principal. Depois, na lista abaixo, adicione quantas aulas quiser dentro dele.</p>
+          <input type="text" name="title" placeholder="Título do curso. Ex: Curso de Batismo" required>
+          <textarea name="description" placeholder="Descrição do curso"></textarea>
+          <button type="submit">Criar curso</button>
+        </form>
+      </div>
+      <div class="panel">
+        <form action="/lesson" method="POST">
+          <h2>Adicionar aula</h2>
+          <p class="helper">Selecione o curso e cadastre quantas aulas forem necessárias dentro dele.</p>
+          <select name="courseId" id="lesson-course-select" required>
+            <option value="">Selecione o curso</option>
+          </select>
+          <input type="text" name="lessonTitle" placeholder="Título da aula. Ex: Aula 1 - Introdução" required>
+          <textarea name="lessonDescription" placeholder="Descrição da aula"></textarea>
+          <input type="url" name="videoUrl" placeholder="Link do vídeo: YouTube, Vimeo ou Google Drive">
+          <input type="url" name="materialUrl" placeholder="Link do PDF ou material de apoio">
+          <button type="submit">Adicionar aula no curso selecionado</button>
+        </form>
+      </div>
+      <div class="panel">
+        <form action="/alterar-senha" method="POST">
+          <h2>Alterar senha dos logins</h2>
+          <p class="helper">Somente o administrador pode trocar a senha do admin, da mídia ou da secretaria.</p>
+          <select name="emailAlvo" required>
+            <option value="admin@igreja.com">Admin - Pr. Daniel</option>
+            <option value="midia@igreja.com">Mídia</option>
+            <option value="secretaria@igreja.com">Secretaria</option>
+            <option value="membro@igreja.com">Acesso de Membros</option>
+          </select>
+          <input type="password" name="senhaAtual" placeholder="Senha atual do admin" required>
+          <input type="password" name="novaSenha" placeholder="Nova senha" required>
+          <input type="password" name="confirmarSenha" placeholder="Confirmar nova senha" required>
+          <button type="submit">Alterar senha</button>
+        </form>
+      </div>
+    </div>
+
+    <section style="margin-top:45px">
+      <h2>Cursos cadastrados</h2>
+      <div id="admin-courses" class="course-admin-list"></div>
+    </section>
+
+
+    <section style="margin-top:45px">
+      <h2>Publicações cadastradas</h2>
+      <div id="admin-posts" class="cards"></div>
+    </section>
+  </main>
+<footer class="site-footer"><p>Igreja do Evangelho Pedra Angular • Todos os direitos reservados.</p>
+  <p>Site desenvolvido por RN Vision Pira.</p></footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

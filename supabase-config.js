@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Publicações</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="topbar">
+      <a class="brand" href="index.html"><img src="assets/logo-pedra-angular.png" alt="Igreja Pedra Angular"></a>
+      <button class="menu-btn" onclick="toggleMenu()" aria-label="Abrir menu">☰</button>
+      <nav class="menu" id="menu">
+        <a href="index.html">Início</a>
+        <a href="midia.html">Mídia</a>
+        <a href="estudos-pr-daniel.html">Estudos Pr. Daniel</a>
+        <a href="cursos.html">Cursos</a>
+        <a class="active" href="publicacoes.html">Publicações</a>
+        <a href="contato.html">Contato</a>
+        <a href="login.html">Login</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    <div class="section-title">
+      <h1>Publicações</h1>
+      <p>Publicações da Secretaria. Tudo que for publicado pelo login secretaria@igreja.com aparecerá aqui automaticamente.</p>
+    </div>
+    <div id="feed" class="cards" data-feed="secretaria"></div>
+  </main>
+  <div class="lightbox" id="lightbox">
+    <button class="lb-close" onclick="closeLightbox()" aria-label="Fechar">×</button>
+    <button class="lb-prev" onclick="prevMedia()" aria-label="Anterior">‹</button>
+    <div class="lightbox-content" id="lightboxContent"></div>
+    <button class="lb-next" onclick="nextMedia()" aria-label="Próxima">›</button>
+  </div>
+<footer class="site-footer"><p>Igreja do Evangelho Pedra Angular • Todos os direitos reservados.</p>
+  <p>Site desenvolvido por RN Vision Pira.</p></footer>
+  <script src="script.js"></script>
+</body>
+</html>

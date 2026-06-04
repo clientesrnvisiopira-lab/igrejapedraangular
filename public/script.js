@@ -495,11 +495,118 @@ async function salvarCertificadoSupabase(payload){
     if(error) console.warn('Certificado não salvo na tabela certificates:', error.message);
   }catch(e){ console.warn('Tabela certificates ainda não criada.', e.message); }
 }
-function abrirCertificadoPrint({nome, curso, codigo, data}){
-  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Certificado - ${escapeHtml(nome)}</title><style>
-    @page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Georgia,'Times New Roman',serif;background:#f7f0df;color:#211306}.cert{width:297mm;height:210mm;padding:18mm;background:radial-gradient(circle at top,#fff7e5 0,#f5ead1 42%,#efe0bd 100%);position:relative;overflow:hidden}.cert:before{content:"";position:absolute;inset:10mm;border:3px solid #b98935}.cert:after{content:"";position:absolute;inset:15mm;border:1px solid rgba(55,31,8,.35)}.inner{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10mm 20mm}.logo{width:96px;height:96px;object-fit:contain;margin-bottom:12px}.church{font:700 18px Arial,sans-serif;letter-spacing:.22em;text-transform:uppercase;color:#6a4015}.title{font-size:58px;letter-spacing:.08em;text-transform:uppercase;margin:18px 0 8px;color:#2a1707}.line{width:150mm;height:2px;background:#b98935;margin:10px auto 22px}.txt{font-size:23px;line-height:1.55;max-width:220mm}.name{font-size:42px;font-weight:700;margin:16px 0 8px;border-bottom:2px solid #2a1707;min-width:180mm;padding-bottom:8px}.course{font-weight:700;color:#5b3515}.footer{position:absolute;left:28mm;right:28mm;bottom:24mm;display:flex;justify-content:space-between;align-items:flex-end;font:14px Arial,sans-serif;color:#3b2411}.signature{width:78mm;border-top:1px solid #2a1707;padding-top:8px;text-align:center}.code{text-align:left}.print{position:fixed;right:18px;top:18px;border:0;background:#181008;color:#fff;padding:12px 18px;border-radius:999px;font:700 14px Arial;cursor:pointer}@media print{.print{display:none}}</style></head><body><button class="print" onclick="window.print()">Salvar / Imprimir PDF</button><section class="cert"><div class="inner"><img class="logo" src="/assets/logo-pedra-angular.png"><div class="church">Igreja do Evangelho Pedra Angular</div><h1 class="title">Certificado</h1><div class="line"></div><div class="txt">Certificamos que</div><div class="name">${escapeHtml(nome)}</div><div class="txt">concluiu com êxito todas as aulas do curso <span class="course">${escapeHtml(curso)}</span>.</div><div class="footer"><div class="code"><strong>Código:</strong> ${escapeHtml(codigo)}<br><strong>Data:</strong> ${escapeHtml(data)}</div><div class="signature">Igreja do Evangelho Pedra Angular</div></div></div></section></body></html>`;
-  const win = window.open('', '_blank');
-  win.document.write(html); win.document.close();
+function sanitizeFileName(text='certificado'){
+  return String(text || 'certificado')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-zA-Z0-9-_]+/g,'-')
+    .replace(/-+/g,'-')
+    .replace(/^-|-$/g,'')
+    .toLowerCase() || 'certificado';
+}
+function carregarScript(src){
+  return new Promise((resolve,reject)=>{
+    if(document.querySelector(`script[src="${src}"]`)) return resolve();
+    const script=document.createElement('script');
+    script.src=src;
+    script.onload=resolve;
+    script.onerror=reject;
+    document.head.appendChild(script);
+  });
+}
+async function garantirJsPDF(){
+  if(window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  await carregarScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+  if(window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  throw new Error('Não foi possível carregar o gerador de PDF.');
+}
+async function imagemParaDataURL(src){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.crossOrigin='anonymous';
+    img.onload=()=>{
+      try{
+        const canvas=document.createElement('canvas');
+        canvas.width=img.naturalWidth || img.width;
+        canvas.height=img.naturalHeight || img.height;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0);
+        resolve(canvas.toDataURL('image/png'));
+      }catch(e){ resolve(null); }
+    };
+    img.onerror=()=>resolve(null);
+    img.src=src;
+  });
+}
+function textoCentralizado(doc, texto, y, tamanho=18, estilo='normal', cor=[33,19,6]){
+  doc.setFont('times', estilo);
+  doc.setFontSize(tamanho);
+  doc.setTextColor(cor[0], cor[1], cor[2]);
+  doc.text(String(texto || ''), 148.5, y, { align:'center' });
+}
+async function baixarCertificadoPDF({nome, curso, codigo, data}){
+  const jsPDF = await garantirJsPDF();
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+
+  // Fundo e moldura
+  doc.setFillColor(247,240,223);
+  doc.rect(0,0,297,210,'F');
+  doc.setDrawColor(185,137,53);
+  doc.setLineWidth(1.2);
+  doc.rect(10,10,277,190);
+  doc.setDrawColor(96,66,28);
+  doc.setLineWidth(0.35);
+  doc.rect(15,15,267,180);
+
+  // Detalhes suaves
+  doc.setDrawColor(230,210,165);
+  doc.setLineWidth(0.2);
+  for(let i=0;i<8;i++){
+    doc.ellipse(148.5,105,115+i*5,70+i*3,'S');
+  }
+
+  const logo = await imagemParaDataURL('/assets/logo-pedra-angular.png');
+  if(logo){
+    try{ doc.addImage(logo, 'PNG', 132, 20, 33, 33); }catch(e){}
+  }
+
+  textoCentralizado(doc, 'IGREJA DO EVANGELHO PEDRA ANGULAR', 61, 10, 'bold', [106,64,21]);
+  textoCentralizado(doc, 'CERTIFICADO', 82, 34, 'bold', [42,23,7]);
+  doc.setDrawColor(185,137,53);
+  doc.setLineWidth(0.8);
+  doc.line(73,91,224,91);
+
+  textoCentralizado(doc, 'Certificamos que', 108, 15, 'normal', [33,19,6]);
+  textoCentralizado(doc, nome, 128, 26, 'bold', [33,19,6]);
+  doc.setDrawColor(42,23,7);
+  doc.setLineWidth(0.5);
+  doc.line(58,134,239,134);
+
+  textoCentralizado(doc, 'concluiu com êxito todas as aulas do curso', 149, 15, 'normal', [33,19,6]);
+  textoCentralizado(doc, curso, 161, 16, 'bold', [91,53,21]);
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(59,36,17);
+  doc.text(`Código: ${codigo || ''}`, 26, 183);
+  doc.text(`Data: ${data || new Date().toLocaleDateString('pt-BR')}`, 26, 190);
+
+  doc.setDrawColor(42,23,7);
+  doc.line(194,184,270,184);
+  doc.text('Igreja do Evangelho Pedra Angular', 232, 191, {align:'center'});
+
+  const arquivo = `certificado-${sanitizeFileName(nome)}.pdf`;
+  doc.save(arquivo);
+}
+function abrirCertificadoPrint(dados){
+  baixarCertificadoPDF(dados).catch(err=>{
+    console.error(err);
+    alert('Não foi possível baixar o PDF automaticamente. Vou abrir a versão para imprimir/salvar.');
+    const {nome, curso, codigo, data}=dados;
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Certificado - ${escapeHtml(nome)}</title><style>
+      @page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Georgia,'Times New Roman',serif;background:#f7f0df;color:#211306}.cert{width:297mm;height:210mm;padding:18mm;background:radial-gradient(circle at top,#fff7e5 0,#f5ead1 42%,#efe0bd 100%);position:relative;overflow:hidden}.cert:before{content:"";position:absolute;inset:10mm;border:3px solid #b98935}.cert:after{content:"";position:absolute;inset:15mm;border:1px solid rgba(55,31,8,.35)}.inner{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10mm 20mm}.logo{width:96px;height:96px;object-fit:contain;margin-bottom:12px}.church{font:700 18px Arial,sans-serif;letter-spacing:.22em;text-transform:uppercase;color:#6a4015}.title{font-size:58px;letter-spacing:.08em;text-transform:uppercase;margin:18px 0 8px;color:#2a1707}.line{width:150mm;height:2px;background:#b98935;margin:10px auto 22px}.txt{font-size:23px;line-height:1.55;max-width:220mm}.name{font-size:42px;font-weight:700;margin:16px 0 8px;border-bottom:2px solid #2a1707;min-width:180mm;padding-bottom:8px}.course{font-weight:700;color:#5b3515}.footer{position:absolute;left:28mm;right:28mm;bottom:24mm;display:flex;justify-content:space-between;align-items:flex-end;font:14px Arial,sans-serif;color:#3b2411}.signature{width:78mm;border-top:1px solid #2a1707;padding-top:8px;text-align:center}.code{text-align:left}.print{position:fixed;right:18px;top:18px;border:0;background:#181008;color:#fff;padding:12px 18px;border-radius:999px;font:700 14px Arial;cursor:pointer}@media print{.print{display:none}}</style></head><body><button class="print" onclick="window.print()">Salvar / Imprimir PDF</button><section class="cert"><div class="inner"><img class="logo" src="/assets/logo-pedra-angular.png"><div class="church">Igreja do Evangelho Pedra Angular</div><h1 class="title">Certificado</h1><div class="line"></div><div class="txt">Certificamos que</div><div class="name">${escapeHtml(nome)}</div><div class="txt">concluiu com êxito todas as aulas do curso <span class="course">${escapeHtml(curso)}</span>.</div><div class="footer"><div class="code"><strong>Código:</strong> ${escapeHtml(codigo)}<br><strong>Data:</strong> ${escapeHtml(data)}</div><div class="signature">Igreja do Evangelho Pedra Angular</div></div></div></section></body></html>`;
+    const win = window.open('', '_blank');
+    if(win){ win.document.write(html); win.document.close(); }
+  });
 }
 async function solicitarCertificado(courseId){
   if(!dbReady()) return alert('Supabase não configurado.');

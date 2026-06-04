@@ -156,6 +156,68 @@ async function readCourses(){
 function digitsOnly(value){ return String(value || "").replace(/\D/g, ""); }
 function phoneFromAttendance(r){ return digitsOnly(r.student_phone || r.phone || String(r.user_email || "").replace(/^TEL:/i, "")); }
 
+function certificateCode(courseId, phone){
+  const base = `${courseId}-${digitsOnly(phone)}`;
+  let hash = 0;
+  for(let i=0;i<base.length;i++){ hash = ((hash << 5) - hash) + base.charCodeAt(i); hash |= 0; }
+  return 'IPA-' + new Date().getFullYear() + '-' + Math.abs(hash).toString().padStart(6,'0').slice(0,6);
+}
+async function readCertificates(){
+  const existing = await sb("certificates?select=*&order=issued_at.desc").catch(()=>[]);
+  const normalized = (existing || []).map(r => ({
+    id: r.id,
+    course_id: r.course_id,
+    course_title: r.course_title || r.courseTitle || 'Curso',
+    student_name: r.student_name || r.studentName || r.name || 'Aluno',
+    student_phone: digitsOnly(r.student_phone || r.phone || r.telefone || ''),
+    code: r.code || r.certificate_code || r.codigo || '',
+    status: r.status || 'issued',
+    issued_at: r.issued_at || r.data_emissao || r.created_at,
+    created_at: r.created_at
+  }));
+
+  // Se a tabela certificates ainda estiver vazia, mostra no admin os certificados
+  // que já podem ser emitidos com base em presença 100% por telefone/curso.
+  const generated = [];
+  try{
+    const courses = await readCourses();
+    const attendance = await readAttendance();
+    for(const course of courses){
+      const lessons = course.lessons || [];
+      if(!lessons.length) continue;
+      const byPhone = new Map();
+      for(const a of attendance.filter(x => String(x.courseId) === String(course.id))){
+        const phone = digitsOnly(a.studentPhone);
+        if(!phone) continue;
+        if(!byPhone.has(phone)) byPhone.set(phone, { name:a.studentName || 'Aluno', lessons:new Set(), dates:[] });
+        const item = byPhone.get(phone);
+        if(a.lessonId) item.lessons.add(String(a.lessonId));
+        if(a.createdAt) item.dates.push(a.createdAt);
+        if(a.studentName) item.name = a.studentName;
+      }
+      for(const [phone, item] of byPhone.entries()){
+        const ok = lessons.every(l => item.lessons.has(String(l.id)));
+        if(!ok) continue;
+        const code = certificateCode(course.id, phone);
+        if(normalized.some(c => String(c.course_id)===String(course.id) && digitsOnly(c.student_phone)===phone)) continue;
+        generated.push({
+          id: `auto-${course.id}-${phone}`,
+          course_id: course.id,
+          course_title: course.title,
+          student_name: item.name,
+          student_phone: phone,
+          code,
+          status: 'issued',
+          issued_at: item.dates.sort().at(-1) || new Date().toISOString(),
+          created_at: item.dates.sort().at(-1) || new Date().toISOString(),
+          generated_from_attendance: true
+        });
+      }
+    }
+  }catch(e){}
+  return [...normalized, ...generated].sort((a,b)=> new Date(b.issued_at||0)-new Date(a.issued_at||0));
+}
+
 async function readAttendance(){
   const records = await sb("attendance?select=*,courses(title),lessons(title)&order=created_at.desc").catch(()=>[]);
   return records.map(r => ({
@@ -399,11 +461,31 @@ app.post("/edit-lesson/:id", adminOnly, async (req,res)=>{
 });
 app.get("/api/certificates", adminOnly, async (req,res)=>{
   res.set("Cache-Control", "no-store");
-  try{ res.json(await sb("certificates?select=*&order=issued_at.desc")); }
-  catch(e){ res.json([]); }
+  try{ res.json(await readCertificates()); }
+  catch(e){ console.error(e); res.json([]); }
+});
+app.post("/api/certificates", loggedOnly, async (req,res)=>{
+  try{
+    const payload = {
+      course_id:req.body.course_id,
+      course_title:req.body.course_title,
+      student_name:req.body.student_name,
+      student_phone:digitsOnly(req.body.student_phone),
+      code:req.body.code || certificateCode(req.body.course_id, req.body.student_phone),
+      status:req.body.status || 'issued',
+      issued_at:req.body.issued_at || new Date().toISOString()
+    };
+    const saved = await sb("certificates", { method:"POST", body:JSON.stringify(payload) });
+    res.json(Array.isArray(saved) ? saved[0] : saved);
+  }catch(e){
+    console.error(e);
+    res.status(500).json({ error:e.message });
+  }
 });
 app.post("/delete-certificate/:id", adminOnly, async (req,res)=>{
-  await sb(`certificates?id=eq.${enc(req.params.id)}`, { method:"DELETE", prefer:"return=minimal" });
+  if(!String(req.params.id || '').startsWith('auto-')){
+    await sb(`certificates?id=eq.${enc(req.params.id)}`, { method:"DELETE", prefer:"return=minimal" }).catch(()=>null);
+  }
   res.redirect("/admin-certificados.html");
 });
 

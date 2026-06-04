@@ -255,3 +255,42 @@ notify pgrst, 'reload schema';
 -- CORRECAO_TELEFONE_PRESENCA
 ALTER TABLE public.attendance ADD COLUMN IF NOT EXISTS student_phone text;
 CREATE INDEX IF NOT EXISTS idx_attendance_student_phone ON public.attendance(student_phone);
+
+-- CERTIFICADOS E TELEFONE NAS PRESENÇAS
+alter table attendance add column if not exists student_phone text;
+alter table attendance add column if not exists phone text;
+alter table attendance add column if not exists certificate_code text;
+
+create table if not exists certificates (
+  id uuid primary key default gen_random_uuid(),
+  course_id uuid references courses(id) on delete cascade,
+  course_title text,
+  student_name text not null,
+  student_phone text not null,
+  code text not null unique,
+  status text default 'issued',
+  issued_at timestamptz default now(),
+  created_at timestamptz default now(),
+  updated_at timestamptz
+);
+
+alter table certificates add column if not exists course_id uuid;
+alter table certificates add column if not exists course_title text;
+alter table certificates add column if not exists student_name text;
+alter table certificates add column if not exists student_phone text;
+alter table certificates add column if not exists code text;
+alter table certificates add column if not exists status text default 'issued';
+alter table certificates add column if not exists issued_at timestamptz default now();
+alter table certificates add column if not exists created_at timestamptz default now();
+alter table certificates add column if not exists updated_at timestamptz;
+
+create unique index if not exists certificates_course_phone_unique on certificates(course_id, student_phone);
+create index if not exists idx_certificates_student_phone on certificates(student_phone);
+create index if not exists idx_certificates_code on certificates(code);
+create index if not exists idx_attendance_student_phone on attendance(student_phone);
+
+alter table certificates enable row level security;
+drop policy if exists "allow all certificates" on certificates;
+create policy "allow all certificates" on certificates for all using (true) with check (true);
+
+notify pgrst, 'reload schema';

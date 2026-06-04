@@ -479,6 +479,17 @@ async function buscarPresencasCursoTelefone(courseId, phone){
     .map(r => ({...r, student_phone: telefoneDaPresenca(r)}));
 }
 async function salvarCertificadoSupabase(payload){
+  // Salva pelo servidor primeiro. Assim o admin consegue buscar mesmo quando
+  // o navegador não tem permissão direta ou o cache do Supabase está atrasado.
+  try{
+    const res = await fetch('/api/certificates', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      credentials:'same-origin',
+      body:JSON.stringify(payload)
+    });
+    if(res.ok) return await res.json();
+  }catch(e){ console.warn('Falha ao salvar certificado pela API:', e.message); }
   try{
     const { error } = await supabaseClient.from('certificates').upsert(payload, { onConflict:'course_id,student_phone' });
     if(error) console.warn('Certificado não salvo na tabela certificates:', error.message);
@@ -641,6 +652,12 @@ async function salvarAulaSupabase(event, id){
   }
 }
 async function buscarCertificados(){
+  // Usa a rota do servidor porque ela também mostra certificados gerados
+  // automaticamente a partir de presença 100%, mesmo se ainda não foram salvos.
+  try{
+    const res = await fetch('/api/certificates', { credentials:'same-origin', cache:'no-store' });
+    if(res.ok) return await res.json();
+  }catch(e){ console.warn('Falha ao buscar certificados pela API:', e.message); }
   if(!dbReady()) throw new Error('Supabase não configurado');
   const { data, error } = await supabaseClient
     .from('certificates')
@@ -658,14 +675,24 @@ async function carregarCertificadosAdmin(){
     let certs=await buscarCertificados();
     if(termo){
       certs=certs.filter(c=>{
-        const texto=[c.student_name,c.student_phone,c.course_title,c.code,c.status].join(' ').toLowerCase();
-        return texto.includes(String(termo).toLowerCase()) || onlyDigits(c.student_phone).includes(onlyDigits(termo));
+        const nome=c.student_name || c.studentName || c.name || '';
+        const telefone=c.student_phone || c.phone || c.telefone || '';
+        const curso=c.course_title || c.courseTitle || c.course || '';
+        const codigo=c.code || c.certificate_code || c.codigo || '';
+        const texto=[nome,telefone,curso,codigo,c.status].join(' ').toLowerCase();
+        return texto.includes(String(termo).toLowerCase()) || onlyDigits(telefone).includes(onlyDigits(termo));
       });
     }
     if(!certs.length){ area.innerHTML='<div class="panel center"><p>Nenhum certificado encontrado.</p></div>'; return; }
     area.innerHTML=certs.map(c=>{
       const data=c.issued_at ? new Date(c.issued_at).toLocaleDateString('pt-BR') : new Date(c.created_at || Date.now()).toLocaleDateString('pt-BR');
-      return `<article class="panel certificate-admin-card"><h3>${escapeHtml(c.student_name || 'Aluno')}</h3><p><strong>Curso:</strong> ${escapeHtml(c.course_title || 'Curso')}</p><p><strong>Telefone:</strong> ${escapeHtml(formatPhone(c.student_phone || ''))}</p><p><strong>Código:</strong> ${escapeHtml(c.code || '')}</p><p><strong>Emissão:</strong> ${escapeHtml(data)}</p><div class="admin-actions"><button type="button" onclick="abrirCertificadoPrint({nome:'${escapeAttr(c.student_name || 'Aluno')}', curso:'${escapeAttr(c.course_title || 'Curso')}', codigo:'${escapeAttr(c.code || '')}', data:'${escapeAttr(data)}'})">Reemitir PDF</button><button type="button" class="danger" onclick="excluirCertificadoSupabase('${c.id}')">Excluir certificado</button></div></article>`;
+      const nome=c.student_name || c.studentName || c.name || 'Aluno';
+      const telefone=c.student_phone || c.phone || c.telefone || '';
+      const curso=c.course_title || c.courseTitle || c.course || 'Curso';
+      const codigo=c.code || c.certificate_code || c.codigo || '';
+      const tagAuto=c.generated_from_attendance ? '<p><em>Gerado automaticamente pelas presenças concluídas.</em></p>' : '';
+      const deleteBtn=c.generated_from_attendance ? '' : `<button type="button" class="danger" onclick="excluirCertificadoSupabase('${c.id}')">Excluir certificado</button>`;
+      return `<article class="panel certificate-admin-card"><h3>${escapeHtml(nome)}</h3><p><strong>Curso:</strong> ${escapeHtml(curso)}</p><p><strong>Telefone:</strong> ${escapeHtml(formatPhone(telefone))}</p><p><strong>Código:</strong> ${escapeHtml(codigo)}</p><p><strong>Emissão:</strong> ${escapeHtml(data)}</p>${tagAuto}<div class="admin-actions"><button type="button" onclick="abrirCertificadoPrint({nome:'${escapeAttr(nome)}', curso:'${escapeAttr(curso)}', codigo:'${escapeAttr(codigo)}', data:'${escapeAttr(data)}'})">Reemitir PDF</button>${deleteBtn}</div></article>`;
     }).join('');
   }catch(e){
     console.error(e);
@@ -673,9 +700,18 @@ async function carregarCertificadosAdmin(){
   }
 }
 async function excluirCertificadoSupabase(id){
+  if(String(id || '').startsWith('auto-')){
+    alert('Este certificado foi montado automaticamente pelas presenças. Para remover, exclua/ajuste as presenças do aluno.');
+    return;
+  }
   if(!confirm('Excluir este certificado emitido?')) return;
-  const { error } = await supabaseClient.from('certificates').delete().eq('id', id);
-  if(error) return alert('Erro ao excluir certificado.');
+  try{
+    const res = await fetch('/delete-certificate/' + encodeURIComponent(id), { method:'POST', credentials:'same-origin' });
+    if(!res.ok) throw new Error('Erro ao excluir certificado.');
+  }catch(e){
+    const { error } = await supabaseClient.from('certificates').delete().eq('id', id);
+    if(error) return alert('Erro ao excluir certificado.');
+  }
   await carregarCertificadosAdmin();
 }
 

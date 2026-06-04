@@ -1,0 +1,60 @@
+SITE IGREJA PEDRA ANGULAR - VERSÃO COM ÁREA DE CURSOS
+
+Como iniciar:
+1. Extraia a pasta do ZIP.
+2. Clique em INICIAR.bat ou rode no terminal:
+   npm install
+   npm start
+
+3. Acesse no navegador:
+   http://localhost:3000
+
+Logins:
+ADMINISTRADOR
+E-mail: admin@igreja.com
+Senha: 123456
+
+MÍDIA
+E-mail: midia@igreja.com
+Senha: 123456
+
+SECRETARIA
+E-mail: secretaria@igreja.com
+Senha: 123456
+
+MEMBROS / ALUNOS
+E-mail: membro@igreja.com
+Senha: 123456
+
+O que foi adicionado:
+- Página /cursos.html protegida por login.
+- Acesso de membros para visualizar cursos.
+- Formulário no Painel Administrativo para cadastrar cursos.
+- Campo para link de vídeo e link de PDF/material de apoio.
+- Lista de cursos no painel administrativo com opção de excluir.
+- Link "Cursos" no menu do site.
+- Opção para alterar a senha do acesso de membros pelo painel admin.
+
+Páginas importantes:
+- /login.html
+- /cursos.html
+- /admin.html
+- /area-midia.html
+- /area-secretaria.html
+- /midia.html
+- /publicacoes.html
+
+
+ATUALIZAÇÃO - CURSOS E PRESENÇA
+- O Painel Administrativo agora cria o curso principal.
+- Dentro de cada curso, é possível adicionar quantas aulas forem necessárias.
+- Cada aula pode ter link de vídeo e link de material/PDF.
+- Na página Cursos, o aluno digita o nome completo para registrar presença em cada aula.
+- No Painel Administrativo existe a área Painel de Presença com aluno, curso, aula e data/hora do registro.
+
+
+ATUALIZAÇÃO SUPABASE
+1. Abra public/supabase-config.js
+2. Cole sua Publishable key no campo COLE_AQUI_SUA_PUBLISHABLE_KEY
+3. No Supabase, rode também o SQL do arquivo SQL_SUPABASE_COMPLEMENTAR.txt
+4. Envie todos os arquivos para o GitHub e faça deploy no Render.

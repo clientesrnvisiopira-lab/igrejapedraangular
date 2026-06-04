@@ -46,6 +46,9 @@ function mediaUrl(file){
 function escapeHtml(text=''){
   return String(text).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
+function escapeAttr(text=''){
+  return String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function speedControl(){
   return `<select class="speed-control" onchange="changePlaybackSpeed(this)">
     <option value="0.5">0.5x</option>
@@ -254,6 +257,32 @@ function dbErrorMsg(){
 }
 
 async function buscarCursosComAulas(){
+  // Primeiro usa a API do próprio servidor. Assim funciona para admin/membro logado
+  // mesmo quando o Supabase tem RLS/permissões diferentes para a chave pública.
+  try{
+    const res = await fetch('/api/courses', { credentials:'same-origin', cache:'no-store' });
+    if(res.ok){
+      const apiCourses = await res.json();
+      if(Array.isArray(apiCourses)){
+        return apiCourses.map(c => ({
+          id: c.id,
+          title: c.title,
+          description: c.description || '',
+          createdAt: c.createdAt || c.created_at,
+          lessons: (c.lessons || []).map(a => ({
+            id: a.id,
+            courseId: a.courseId || a.course_id || c.id,
+            title: a.title,
+            description: a.description || '',
+            videoUrl: a.videoUrl || a.video_url || '',
+            materialUrl: a.materialUrl || a.material_url || '',
+            createdAt: a.createdAt || a.created_at
+          }))
+        }));
+      }
+    }
+  }catch(e){ console.warn('API /api/courses indisponível, tentando Supabase direto.', e); }
+
   if(!dbReady()) throw new Error('Supabase não configurado');
   const { data: courses, error: cErr } = await supabaseClient
     .from('courses')
@@ -287,20 +316,48 @@ async function buscarCursosComAulas(){
 }
 
 async function buscarPresencas(){
+  // Usa a API protegida do servidor para evitar erro de coluna student_phone/phone
+  // e para garantir que o painel admin enxergue o que foi salvo no banco.
+  try{
+    const res = await fetch('/api/attendance', { credentials:'same-origin', cache:'no-store' });
+    if(res.ok){
+      const records = await res.json();
+      if(Array.isArray(records)) return records.map(r => ({
+        id: r.id,
+        studentName: r.studentName || r.student_name || '',
+        studentPhone: onlyDigits(r.studentPhone || r.student_phone || r.phone || ''),
+        certificateCode: r.certificateCode || r.certificate_code || '',
+        createdAt: r.createdAt || r.created_at,
+        courseId: r.courseId || r.course_id,
+        lessonId: r.lessonId || r.lesson_id,
+        courseTitle: r.courseTitle || r.course_title || 'Curso sem nome',
+        lessonTitle: r.lessonTitle || r.lesson_title || 'Aula sem nome'
+      }));
+    }
+  }catch(e){ console.warn('API /api/attendance indisponível, tentando Supabase direto.', e); }
+
   if(!dbReady()) throw new Error('Supabase não configurado');
   const { data, error } = await supabaseClient
     .from('attendance')
-    .select('id, student_name, created_at, course_id, lesson_id, courses(title), lessons(title)')
+    .select('*')
     .order('created_at', { ascending:false });
   if(error) throw error;
+
+  const courses = await buscarCursosComAulas().catch(()=>[]);
+  const courseMap = new Map(courses.map(c => [String(c.id), c]));
+  const lessonMap = new Map();
+  courses.forEach(c => (c.lessons || []).forEach(a => lessonMap.set(String(a.id), a)));
+
   return (data || []).map(r => ({
     id: r.id,
     studentName: r.student_name,
+    studentPhone: telefoneDaPresenca(r),
+    certificateCode: r.certificate_code || '',
     createdAt: r.created_at,
     courseId: r.course_id,
     lessonId: r.lesson_id,
-    courseTitle: r.courses?.title || 'Curso sem nome',
-    lessonTitle: r.lessons?.title || 'Aula sem nome'
+    courseTitle: courseMap.get(String(r.course_id))?.title || r.course_title || 'Curso sem nome',
+    lessonTitle: lessonMap.get(String(r.lesson_id))?.title || r.lesson_title || 'Aula sem nome'
   }));
 }
 
@@ -336,17 +393,20 @@ async function carregarCursos(){
             <div class="course-actions">${videoBtn}${materialBtn}</div>
             <form class="attendance-form" data-course-id="${c.id}" data-lesson-id="${a.id}">
               <label>Registrar presença nesta aula</label>
-              <div class="attendance-row">
+              <div class="attendance-row attendance-row-vertical">
                 <input type="text" name="studentName" placeholder="Digite seu nome completo" required>
+                <input type="tel" name="studentPhone" class="phone-mask" placeholder="Telefone: (19) 99991-3539" required>
                 <button type="submit">Confirmar presença</button>
               </div>
             </form>
           </div>
         </div>`;
       }).join('') : '<p class="helper">Este curso ainda não possui aulas cadastradas.</p>';
-      return `<article class="course-box collapsed"><button type="button" class="course-toggle" onclick="toggleCourse(this)"><div><small>Curso ${courseIndex+1}</small><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.description||'')}</p></div><span>Ver aulas</span></button><div class="lessons-list">${lessonsHtml}</div></article>`;
+      const certHtml = lessons.length ? `<div class="certificate-request"><h3>Solicitar certificado</h3><p>Após registrar presença em todas as aulas, digite o mesmo telefone usado nas presenças para liberar o certificado.</p><div class="attendance-row"><input id="cert-phone-${c.id}" class="phone-mask" type="tel" placeholder="Telefone: (19) 99991-3539"><button type="button" onclick="solicitarCertificado('${c.id}')">Gerar certificado</button></div><div id="cert-msg-${c.id}" class="certificate-message"></div></div>` : '';
+      return `<article class="course-box collapsed"><button type="button" class="course-toggle" onclick="toggleCourse(this)"><div><small>Curso ${courseIndex+1}</small><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.description||'')}</p></div><span>Ver aulas</span></button><div class="lessons-list">${lessonsHtml}${certHtml}</div></article>`;
     }).join('');
     configurarFormsPresenca();
+    aplicarMascaraTelefones();
   }catch(e){
     console.error(e);
     area.innerHTML='<div class="panel center"><h2>Não foi possível carregar os cursos.</h2><p>Verifique a chave do Supabase e as permissões das tabelas.</p></div>';
@@ -369,6 +429,96 @@ function toggleLesson(btn){
   if(icon) icon.textContent = card.classList.contains('collapsed') ? '+' : '−';
 }
 
+
+function onlyDigits(value){ return String(value || '').replace(/\D/g,''); }
+function normalizarNome(value){ return String(value || '').trim().replace(/\s+/g,' '); }
+function aplicarMascaraTelefones(){
+  document.querySelectorAll('.phone-mask, input[name="studentPhone"], #certificate-phone').forEach(input=>{
+    if(input.dataset.phoneReady) return;
+    input.dataset.phoneReady='1';
+    input.addEventListener('input', e => { e.target.value = formatPhone(e.target.value); });
+  });
+}
+function certificateCode(courseId, phone){
+  const base = `${courseId}-${onlyDigits(phone)}`;
+  let hash = 0;
+  for(let i=0;i<base.length;i++){ hash = ((hash << 5) - hash) + base.charCodeAt(i); hash |= 0; }
+  return 'IPA-' + new Date().getFullYear() + '-' + Math.abs(hash).toString().padStart(6,'0').slice(0,6);
+}
+function telefoneDaPresenca(row){
+  return onlyDigits(row?.student_phone || row?.phone || String(row?.user_email || '').replace(/^TEL:/i, '') || '');
+}
+
+async function buscarPresencasCursoTelefone(courseId, phone){
+  const digits = onlyDigits(phone);
+
+  // 1) Tenta o banco atualizado, com student_phone.
+  let resp = await supabaseClient
+    .from('attendance')
+    .select('id, student_name, student_phone, lesson_id, course_id, created_at')
+    .eq('course_id', courseId)
+    .eq('student_phone', digits);
+  if(!resp.error) return resp.data || [];
+
+  // 2) Tenta a coluna phone, caso ela exista no banco do cliente.
+  resp = await supabaseClient
+    .from('attendance')
+    .select('id, student_name, phone, lesson_id, course_id, created_at')
+    .eq('course_id', courseId)
+    .eq('phone', digits);
+  if(!resp.error) return (resp.data || []).map(r => ({...r, student_phone: r.phone}));
+
+  // 3) Funciona mesmo sem criar coluna nova: usa user_email para guardar TEL:telefone.
+  resp = await supabaseClient
+    .from('attendance')
+    .select('id, student_name, user_email, lesson_id, course_id, created_at')
+    .eq('course_id', courseId);
+  if(resp.error) throw resp.error;
+  return (resp.data || [])
+    .filter(r => telefoneDaPresenca(r) === digits)
+    .map(r => ({...r, student_phone: telefoneDaPresenca(r)}));
+}
+async function salvarCertificadoSupabase(payload){
+  try{
+    const { error } = await supabaseClient.from('certificates').upsert(payload, { onConflict:'course_id,student_phone' });
+    if(error) console.warn('Certificado não salvo na tabela certificates:', error.message);
+  }catch(e){ console.warn('Tabela certificates ainda não criada.', e.message); }
+}
+function abrirCertificadoPrint({nome, curso, codigo, data}){
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Certificado - ${escapeHtml(nome)}</title><style>
+    @page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Georgia,'Times New Roman',serif;background:#f7f0df;color:#211306}.cert{width:297mm;height:210mm;padding:18mm;background:radial-gradient(circle at top,#fff7e5 0,#f5ead1 42%,#efe0bd 100%);position:relative;overflow:hidden}.cert:before{content:"";position:absolute;inset:10mm;border:3px solid #b98935}.cert:after{content:"";position:absolute;inset:15mm;border:1px solid rgba(55,31,8,.35)}.inner{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10mm 20mm}.logo{width:96px;height:96px;object-fit:contain;margin-bottom:12px}.church{font:700 18px Arial,sans-serif;letter-spacing:.22em;text-transform:uppercase;color:#6a4015}.title{font-size:58px;letter-spacing:.08em;text-transform:uppercase;margin:18px 0 8px;color:#2a1707}.line{width:150mm;height:2px;background:#b98935;margin:10px auto 22px}.txt{font-size:23px;line-height:1.55;max-width:220mm}.name{font-size:42px;font-weight:700;margin:16px 0 8px;border-bottom:2px solid #2a1707;min-width:180mm;padding-bottom:8px}.course{font-weight:700;color:#5b3515}.footer{position:absolute;left:28mm;right:28mm;bottom:24mm;display:flex;justify-content:space-between;align-items:flex-end;font:14px Arial,sans-serif;color:#3b2411}.signature{width:78mm;border-top:1px solid #2a1707;padding-top:8px;text-align:center}.code{text-align:left}.print{position:fixed;right:18px;top:18px;border:0;background:#181008;color:#fff;padding:12px 18px;border-radius:999px;font:700 14px Arial;cursor:pointer}@media print{.print{display:none}}</style></head><body><button class="print" onclick="window.print()">Salvar / Imprimir PDF</button><section class="cert"><div class="inner"><img class="logo" src="/assets/logo-pedra-angular.png"><div class="church">Igreja do Evangelho Pedra Angular</div><h1 class="title">Certificado</h1><div class="line"></div><div class="txt">Certificamos que</div><div class="name">${escapeHtml(nome)}</div><div class="txt">concluiu com êxito todas as aulas do curso <span class="course">${escapeHtml(curso)}</span>.</div><div class="footer"><div class="code"><strong>Código:</strong> ${escapeHtml(codigo)}<br><strong>Data:</strong> ${escapeHtml(data)}</div><div class="signature">Igreja do Evangelho Pedra Angular</div></div></div></section></body></html>`;
+  const win = window.open('', '_blank');
+  win.document.write(html); win.document.close();
+}
+async function solicitarCertificado(courseId){
+  if(!dbReady()) return alert('Supabase não configurado.');
+  const phoneInput=document.getElementById(`cert-phone-${courseId}`);
+  const msg=document.getElementById(`cert-msg-${courseId}`);
+  const phone=phoneInput ? phoneInput.value : '';
+  const digits=onlyDigits(phone);
+  if(digits.length < 10){ if(msg) msg.innerHTML='<div class="presence-error">Digite o telefone completo.</div>'; return; }
+  try{
+    const courses=await buscarCursosComAulas();
+    const course=courses.find(c=>String(c.id)===String(courseId));
+    if(!course) throw new Error('Curso não encontrado.');
+    const lessons=course.lessons || [];
+    if(!lessons.length) throw new Error('Este curso ainda não possui aulas cadastradas.');
+    const presencas=await buscarPresencasCursoTelefone(courseId, digits);
+    const concluidas=new Set(presencas.map(p=>String(p.lesson_id)));
+    const faltando=lessons.filter(a=>!concluidas.has(String(a.id)));
+    if(faltando.length){
+      if(msg) msg.innerHTML=`<div class="presence-error"><strong>Certificado ainda não liberado.</strong><br>Presenças encontradas: ${concluidas.size} de ${lessons.length}. Falta concluir: ${faltando.map(a=>escapeHtml(a.title)).join(', ')}.</div>`;
+      return;
+    }
+    const nome=normalizarNome(presencas[0]?.student_name || 'Aluno concluinte');
+    const codigo=certificateCode(courseId, digits);
+    const data=new Date().toLocaleDateString('pt-BR');
+    await salvarCertificadoSupabase({ course_id:courseId, course_title:course.title, student_name:nome, student_phone:digits, code:codigo, status:'issued', issued_at:new Date().toISOString() });
+    if(msg) msg.innerHTML=`<div class="presence-ok"><strong>Certificado liberado!</strong> Código: ${codigo}</div>`;
+    abrirCertificadoPrint({ nome, curso:course.title, codigo, data });
+  }catch(err){ console.error(err); if(msg) msg.innerHTML='<div class="presence-error">Não foi possível verificar o certificado. Confira o telefone e tente novamente.</div>'; }
+}
+
 function configurarFormsPresenca(){
   document.querySelectorAll('.attendance-form').forEach(form => {
     if(form.dataset.ready) return;
@@ -380,20 +530,34 @@ function configurarFormsPresenca(){
       const original=btn.textContent;
       btn.disabled=true; btn.textContent='Salvando...';
       try{
-        const studentName=form.querySelector('[name="studentName"]').value.trim();
-        const { error } = await supabaseClient.from('attendance').insert({
+        const studentName=normalizarNome(form.querySelector('[name="studentName"]').value);
+        const phoneInput=form.querySelector('[name="studentPhone"]');
+        const studentPhone=onlyDigits(phoneInput ? phoneInput.value : '');
+        if(studentName.split(' ').length < 2) throw new Error('Digite nome e sobrenome.');
+        if(studentPhone.length < 10) throw new Error('Digite o telefone completo.');
+        const basePayload = {
           course_id: form.dataset.courseId,
-          lesson_id: form.dataset.lessonId,
+          lesson_id: form.datasetLessonId || form.dataset.lessonId,
           student_name: studentName
-        });
-        if(error) throw error;
+        };
+
+        // Tenta salvar com a coluna nova. Se o Supabase ainda não tiver essa coluna,
+        // salva de forma compatível usando user_email = TEL:telefone.
+        let resp = await supabaseClient.from('attendance').insert({ ...basePayload, student_phone: studentPhone });
+        if(resp.error && /student_phone|schema cache|column/i.test(resp.error.message || '')){
+          resp = await supabaseClient.from('attendance').insert({ ...basePayload, phone: studentPhone });
+        }
+        if(resp.error && /phone|schema cache|column/i.test(resp.error.message || '')){
+          resp = await supabaseClient.from('attendance').insert({ ...basePayload, user_email: 'TEL:' + studentPhone });
+        }
+        if(resp.error) throw resp.error;
         form.reset();
         const msg=document.getElementById('attendance-message');
         if(msg) msg.innerHTML='<div class="panel center presence-ok"><strong>Presença registrada com sucesso!</strong></div>';
         alert('Presença registrada com sucesso!');
       }catch(err){
         console.error(err);
-        alert('Erro ao registrar presença. Verifique a conexão com o Supabase.');
+        alert(err.message || 'Erro ao registrar presença. Verifique a conexão com o Supabase.');
       }finally{
         btn.disabled=false; btn.textContent=original;
       }
@@ -415,7 +579,26 @@ async function carregarCursosAdmin(){
     if(!courses.length){ area.innerHTML='<div class="panel center"><p>Nenhum curso cadastrado.</p></div>'; return; }
     area.innerHTML=courses.map(c=>{
       const lessons=Array.isArray(c.lessons) ? c.lessons : [];
-      const lessonList = lessons.length ? lessons.map((a,i)=>`<div class="admin-lesson"><strong>Aula ${i+1}: ${escapeHtml(a.title)}</strong><p>${escapeHtml(a.description||'')}</p><div class="course-actions">${a.videoUrl ? `<a class="btn" href="${escapeHtml(a.videoUrl)}" target="_blank">Ver vídeo</a>` : ''}${a.materialUrl ? `<a class="btn secondary" href="${escapeHtml(a.materialUrl)}" target="_blank">Ver material</a>` : ''}</div><button type="button" class="danger" onclick="excluirAulaSupabase('${a.id}')">Excluir aula</button></div>`).join('') : '<p class="helper">Nenhuma aula cadastrada neste curso.</p>';
+      const lessonList = lessons.length ? lessons.map((a,i)=>`<div class="admin-lesson" id="lesson-${escapeHtml(a.id)}">
+        <div class="lesson-view">
+          <strong>Aula ${i+1}: ${escapeHtml(a.title)}</strong>
+          <p>${escapeHtml(a.description||'')}</p>
+          <div class="course-actions">${a.videoUrl ? `<a class="btn" href="${escapeHtml(a.videoUrl)}" target="_blank">Ver vídeo</a>` : ''}${a.materialUrl ? `<a class="btn secondary" href="${escapeHtml(a.materialUrl)}" target="_blank">Ver material</a>` : ''}</div>
+          <div class="admin-actions"><button type="button" onclick="abrirEdicaoAula('${a.id}')">Editar aula</button><button type="button" class="danger" onclick="excluirAulaSupabase('${a.id}')">Excluir aula</button></div>
+        </div>
+        <form class="lesson-edit-form" id="edit-lesson-${escapeHtml(a.id)}" style="display:none" onsubmit="salvarAulaSupabase(event, '${a.id}')">
+          <h4>Editar aula</h4>
+          <label>Título da aula</label>
+          <input type="text" name="lessonTitle" value="${escapeHtml(a.title || '')}" required>
+          <label>Descrição</label>
+          <textarea name="lessonDescription">${escapeHtml(a.description || '')}</textarea>
+          <label>Link do vídeo</label>
+          <input type="url" name="videoUrl" value="${escapeHtml(a.videoUrl || '')}" placeholder="https://...">
+          <label>Link do PDF ou material</label>
+          <input type="url" name="materialUrl" value="${escapeHtml(a.materialUrl || '')}" placeholder="https://...">
+          <div class="admin-actions"><button type="submit">Salvar alterações</button><button type="button" class="secondary" onclick="fecharEdicaoAula('${a.id}')">Cancelar</button></div>
+        </form>
+      </div>`).join('') : '<p class="helper">Nenhuma aula cadastrada neste curso.</p>';
       return `<article class="panel course-admin-card"><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.description||'')}</p><div class="lessons-admin"><h4>Aulas cadastradas</h4>${lessonList}</div><button type="button" class="danger" onclick="excluirCursoSupabase('${c.id}')">Excluir curso inteiro</button></article>`;
     }).join('');
   }catch(e){
@@ -424,70 +607,102 @@ async function carregarCursosAdmin(){
   }
 }
 
+
+function abrirEdicaoAula(id){
+  const form=document.getElementById(`edit-lesson-${id}`);
+  if(form) form.style.display='block';
+}
+function fecharEdicaoAula(id){
+  const form=document.getElementById(`edit-lesson-${id}`);
+  if(form) form.style.display='none';
+}
+async function salvarAulaSupabase(event, id){
+  event.preventDefault();
+  const form=event.target;
+  const btn=form.querySelector('button[type="submit"]');
+  const original=btn.textContent;
+  btn.disabled=true; btn.textContent='Salvando...';
+  try{
+    const params = new URLSearchParams(new FormData(form));
+    const res = await fetch('/edit-lesson/' + encodeURIComponent(id), {
+      method:'POST',
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+      body: params.toString(),
+      credentials:'same-origin'
+    });
+    if(!res.ok) throw new Error('Erro ao editar aula.');
+    await carregarCursosAdmin();
+    alert('Aula atualizada com sucesso!');
+  }catch(err){
+    console.error(err);
+    alert(err.message || 'Erro ao editar aula.');
+  }finally{
+    btn.disabled=false; btn.textContent=original;
+  }
+}
+async function buscarCertificados(){
+  if(!dbReady()) throw new Error('Supabase não configurado');
+  const { data, error } = await supabaseClient
+    .from('certificates')
+    .select('*')
+    .order('issued_at', { ascending:false });
+  if(error) throw error;
+  return data || [];
+}
+async function carregarCertificadosAdmin(){
+  const area=document.getElementById('admin-certificates');
+  if(!area) return;
+  if(!dbReady()){ area.innerHTML=dbErrorMsg(); return; }
+  try{
+    const termo=onlyDigits(document.getElementById('certificate-search')?.value || '') || String(document.getElementById('certificate-search')?.value || '').toLowerCase().trim();
+    let certs=await buscarCertificados();
+    if(termo){
+      certs=certs.filter(c=>{
+        const texto=[c.student_name,c.student_phone,c.course_title,c.code,c.status].join(' ').toLowerCase();
+        return texto.includes(String(termo).toLowerCase()) || onlyDigits(c.student_phone).includes(onlyDigits(termo));
+      });
+    }
+    if(!certs.length){ area.innerHTML='<div class="panel center"><p>Nenhum certificado encontrado.</p></div>'; return; }
+    area.innerHTML=certs.map(c=>{
+      const data=c.issued_at ? new Date(c.issued_at).toLocaleDateString('pt-BR') : new Date(c.created_at || Date.now()).toLocaleDateString('pt-BR');
+      return `<article class="panel certificate-admin-card"><h3>${escapeHtml(c.student_name || 'Aluno')}</h3><p><strong>Curso:</strong> ${escapeHtml(c.course_title || 'Curso')}</p><p><strong>Telefone:</strong> ${escapeHtml(formatPhone(c.student_phone || ''))}</p><p><strong>Código:</strong> ${escapeHtml(c.code || '')}</p><p><strong>Emissão:</strong> ${escapeHtml(data)}</p><div class="admin-actions"><button type="button" onclick="abrirCertificadoPrint({nome:'${escapeAttr(c.student_name || 'Aluno')}', curso:'${escapeAttr(c.course_title || 'Curso')}', codigo:'${escapeAttr(c.code || '')}', data:'${escapeAttr(data)}'})">Reemitir PDF</button><button type="button" class="danger" onclick="excluirCertificadoSupabase('${c.id}')">Excluir certificado</button></div></article>`;
+    }).join('');
+  }catch(e){
+    console.error(e);
+    area.innerHTML='<div class="panel center"><p>Não foi possível carregar os certificados. Confira se a tabela certificates foi criada no Supabase.</p></div>';
+  }
+}
+async function excluirCertificadoSupabase(id){
+  if(!confirm('Excluir este certificado emitido?')) return;
+  const { error } = await supabaseClient.from('certificates').delete().eq('id', id);
+  if(error) return alert('Erro ao excluir certificado.');
+  await carregarCertificadosAdmin();
+}
+
 async function excluirCursoSupabase(id){
   if(!confirm('Tem certeza que deseja excluir este curso e suas aulas?')) return;
-  const { error } = await supabaseClient.from('courses').delete().eq('id', id);
-  if(error) return alert('Erro ao excluir curso.');
-  await carregarCursosAdmin();
-  await carregarCursos();
+  try{
+    const res = await fetch('/delete-course/' + encodeURIComponent(id), { method:'POST', credentials:'same-origin' });
+    if(!res.ok) throw new Error('Erro ao excluir curso.');
+    await carregarCursosAdmin();
+    await carregarCursos();
+  }catch(e){ alert(e.message || 'Erro ao excluir curso.'); }
 }
 
 async function excluirAulaSupabase(id){
   if(!confirm('Excluir esta aula?')) return;
-  const { error } = await supabaseClient.from('lessons').delete().eq('id', id);
-  if(error) return alert('Erro ao excluir aula.');
-  await carregarCursosAdmin();
-  await carregarCursos();
+  try{
+    const res = await fetch('/delete-lesson/0/' + encodeURIComponent(id), { method:'POST', credentials:'same-origin' });
+    if(!res.ok) throw new Error('Erro ao excluir aula.');
+    await carregarCursosAdmin();
+    await carregarCursos();
+  }catch(e){ alert(e.message || 'Erro ao excluir aula.'); }
 }
 
 function configurarFormsCursosAdmin(){
-  const courseForm=document.querySelector('form[action="/course"]');
-  if(courseForm){
-    courseForm.addEventListener('submit', async e => {
-      e.preventDefault();
-      if(!dbReady()) return alert('Supabase não configurado.');
-      const btn=courseForm.querySelector('button');
-      const original=btn.textContent;
-      btn.disabled=true; btn.textContent='Criando...';
-      try{
-        const title=courseForm.querySelector('[name="title"]').value.trim();
-        const description=courseForm.querySelector('[name="description"]').value.trim();
-        const { error } = await supabaseClient.from('courses').insert({ title, description });
-        if(error) throw error;
-        courseForm.reset();
-        await carregarCursosAdmin();
-        alert('Curso criado com sucesso!');
-      }catch(err){ console.error(err); alert('Erro ao criar curso. Verifique o Supabase.'); }
-      finally{ btn.disabled=false; btn.textContent=original; }
-    });
-  }
-
-  const lessonForm=document.querySelector('form[action="/lesson"]');
-  if(lessonForm){
-    lessonForm.addEventListener('submit', async e => {
-      e.preventDefault();
-      if(!dbReady()) return alert('Supabase não configurado.');
-      const btn=lessonForm.querySelector('button');
-      const original=btn.textContent;
-      btn.disabled=true; btn.textContent='Adicionando...';
-      try{
-        const course_id=lessonForm.querySelector('[name="courseId"]').value;
-        const title=lessonForm.querySelector('[name="lessonTitle"]').value.trim();
-        const description=lessonForm.querySelector('[name="lessonDescription"]').value.trim();
-        const video_url=lessonForm.querySelector('[name="videoUrl"]').value.trim();
-        const material_url=lessonForm.querySelector('[name="materialUrl"]').value.trim();
-        if(!course_id) throw new Error('Selecione um curso.');
-        const payload={ course_id, title, video_url, material_url };
-        if(description) payload.description = description;
-        const { error } = await supabaseClient.from('lessons').insert(payload);
-        if(error) throw error;
-        lessonForm.reset();
-        await carregarCursosAdmin();
-        alert('Aula adicionada com sucesso!');
-      }catch(err){ console.error(err); alert(err.message || 'Erro ao adicionar aula.'); }
-      finally{ btn.disabled=false; btn.textContent=original; }
-    });
-  }
+  // Deixa os formulários de criar curso/aula enviarem para as rotas do servidor.
+  // Isso evita problema de permissão/RLS no Supabase pelo navegador.
+  return;
 }
 
 async function carregarPresencasAdmin(){
@@ -497,7 +712,7 @@ async function carregarPresencasAdmin(){
   try{
     const records=await buscarPresencas();
     if(!records.length){ area.innerHTML='<div class="panel center"><p>Nenhuma presença registrada ainda.</p></div>'; return; }
-    area.innerHTML=`<div class="attendance-table"><table><thead><tr><th>Aluno</th><th>Curso</th><th>Aula</th><th>Data/Hora</th></tr></thead><tbody>${records.map(r=>`<tr><td>${escapeHtml(r.studentName)}</td><td>${escapeHtml(r.courseTitle)}</td><td>${escapeHtml(r.lessonTitle)}</td><td>${new Date(r.createdAt).toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table></div>`;
+    area.innerHTML=`<div class="attendance-table"><table><thead><tr><th>Aluno</th><th>Telefone</th><th>Curso</th><th>Aula</th><th>Data/Hora</th></tr></thead><tbody>${records.map(r=>`<tr><td>${escapeHtml(r.studentName)}</td><td>${escapeHtml(formatPhone(r.studentPhone || ''))}</td><td>${escapeHtml(r.courseTitle)}</td><td>${escapeHtml(r.lessonTitle)}</td><td>${new Date(r.createdAt).toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table></div>`;
   }catch(e){
     area.innerHTML='<div class="panel center"><p>Não foi possível carregar a lista de presença.</p></div>';
   }
@@ -565,8 +780,8 @@ async function carregarPresencasPorCurso(){
     area.innerHTML = Object.values(grouped).map(course=>{
       const totalCurso = Object.values(course.lessons).reduce((sum, lesson)=>sum + lesson.students.length, 0);
       const lessonsHtml = Object.values(course.lessons).map(lesson=>{
-        const rows = lesson.students.map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.studentName)}</td><td>${new Date(r.createdAt).toLocaleString('pt-BR')}</td></tr>`).join('');
-        return `<div class="attendance-lesson-block"><h4>${escapeHtml(lesson.title)} <span>${lesson.students.length} presença(s)</span></h4><div class="attendance-table"><table><thead><tr><th>Nº</th><th>Aluno</th><th>Data/Hora</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+        const rows = lesson.students.map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.studentName)}</td><td>${escapeHtml(formatPhone(r.studentPhone || ''))}</td><td>${new Date(r.createdAt).toLocaleString('pt-BR')}</td></tr>`).join('');
+        return `<div class="attendance-lesson-block"><h4>${escapeHtml(lesson.title)} <span>${lesson.students.length} presença(s)</span></h4><div class="attendance-table"><table><thead><tr><th>Nº</th><th>Aluno</th><th>Telefone</th><th>Data/Hora</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
       }).join('');
       return `<article class="panel attendance-course-block"><h3>${escapeHtml(course.title)}</h3><p class="helper">Total registrado neste curso: <strong>${totalCurso}</strong> presença(s).</p>${lessonsHtml}</article>`;
     }).join('');
@@ -586,6 +801,8 @@ configurarFormsCursosAdmin();
 carregarPresencasAdmin();
 ajustarMenuLogado();
 carregarPresencasPorCurso();
+carregarCertificadosAdmin();
+aplicarMascaraTelefones();
 if(document.getElementById('feed')) setInterval(carregarPosts, 10000);
 
 /* Efeitos visuais premium seguros: não altera login, posts, formulários ou rotas. */

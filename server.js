@@ -153,6 +153,9 @@ async function readCourses(){
     }))
   }));
 }
+function digitsOnly(value){ return String(value || "").replace(/\D/g, ""); }
+function phoneFromAttendance(r){ return digitsOnly(r.student_phone || r.phone || String(r.user_email || "").replace(/^TEL:/i, "")); }
+
 async function readAttendance(){
   const records = await sb("attendance?select=*,courses(title),lessons(title)&order=created_at.desc").catch(()=>[]);
   return records.map(r => ({
@@ -162,6 +165,8 @@ async function readAttendance(){
     courseTitle: r.courses?.title || r.course_title || "Curso sem nome",
     lessonTitle: r.lessons?.title || r.lesson_title || "Aula sem nome",
     studentName: r.student_name,
+    studentPhone: phoneFromAttendance(r),
+    certificateCode: r.certificate_code || "",
     userEmail: r.user_email,
     createdAt: r.created_at
   }));
@@ -262,6 +267,10 @@ app.get("/midias.html", (req,res)=>res.redirect("/midia.html"));
 app.get("/area-midia.html", mediaOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "area-midia.html")));
 app.get("/area-secretaria.html", secretariaOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "area-secretaria.html")));
 app.get("/admin.html", adminOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "admin.html")));
+app.get("/admin-cursos.html", adminOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "admin-cursos.html")));
+app.get("/admin-publicacoes.html", adminOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "admin-publicacoes.html")));
+app.get("/admin-certificados.html", adminOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "admin-certificados.html")));
+app.get("/admin-senhas.html", adminOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "admin-senhas.html")));
 app.get("/presencas.html", adminOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "presencas.html")));
 app.get("/cursos.html", loggedOnly, (req,res)=>res.sendFile(path.join(__dirname, "public", "cursos.html")));
 
@@ -351,14 +360,14 @@ app.post("/course", adminOnly, async (req,res)=>{
   const title = (req.body.title || "").trim(); const description = (req.body.description || "").trim();
   if(!title) return res.send(errorPage("Digite o título do curso.", "/admin.html"));
   await sb("courses", { method:"POST", body:JSON.stringify({ title, description }) });
-  res.redirect("/admin.html");
+  res.redirect("/admin-cursos.html");
 });
 app.post("/lesson", adminOnly, async (req,res)=>{
   const course_id = req.body.courseId; const title = (req.body.lessonTitle || "").trim();
   if(!course_id) return res.send(errorPage("Selecione o curso da aula.", "/admin.html"));
   if(!title) return res.send(errorPage("Digite o título da aula.", "/admin.html"));
   await sb("lessons", { method:"POST", body:JSON.stringify({ course_id, title, description:(req.body.lessonDescription||"").trim(), video_url:(req.body.videoUrl||"").trim(), material_url:(req.body.materialUrl||"").trim() }) });
-  res.redirect("/admin.html");
+  res.redirect("/admin-cursos.html");
 });
 app.post("/course/:id/lesson", adminOnly, async (req,res)=>{
   const course_id = req.params.id;
@@ -371,14 +380,42 @@ app.post("/course/:id/lesson", adminOnly, async (req,res)=>{
     video_url:(req.body.videoUrl||"").trim(),
     material_url:(req.body.materialUrl||"").trim()
   }) });
-  res.redirect("/admin.html");
+  res.redirect("/admin-cursos.html");
 });
-app.post("/delete-lesson/:courseId/:lessonId", adminOnly, async (req,res)=>{ await sb(`lessons?id=eq.${enc(req.params.lessonId)}`, { method:"DELETE", prefer:"return=minimal" }); res.redirect("/admin.html"); });
-app.post("/delete-course/:id", adminOnly, async (req,res)=>{ await sb(`courses?id=eq.${enc(req.params.id)}`, { method:"DELETE", prefer:"return=minimal" }); res.redirect("/admin.html"); });
+app.post("/delete-lesson/:courseId/:lessonId", adminOnly, async (req,res)=>{ await sb(`lessons?id=eq.${enc(req.params.lessonId)}`, { method:"DELETE", prefer:"return=minimal" }); res.redirect("/admin-cursos.html"); });
+app.post("/delete-course/:id", adminOnly, async (req,res)=>{ await sb(`courses?id=eq.${enc(req.params.id)}`, { method:"DELETE", prefer:"return=minimal" }); res.redirect("/admin-cursos.html"); });
+
+app.post("/edit-lesson/:id", adminOnly, async (req,res)=>{
+  const title = (req.body.lessonTitle || req.body.title || "").trim();
+  if(!title) return res.send(errorPage("Digite o título da aula.", "/admin-cursos.html"));
+  await sb(`lessons?id=eq.${enc(req.params.id)}`, { method:"PATCH", body:JSON.stringify({
+    title,
+    description:(req.body.lessonDescription || req.body.description || "").trim(),
+    video_url:(req.body.videoUrl || req.body.video_url || "").trim(),
+    material_url:(req.body.materialUrl || req.body.material_url || "").trim(),
+    updated_at:new Date().toISOString()
+  }) });
+  res.redirect("/admin-cursos.html");
+});
+app.get("/api/certificates", adminOnly, async (req,res)=>{
+  res.set("Cache-Control", "no-store");
+  try{ res.json(await sb("certificates?select=*&order=issued_at.desc")); }
+  catch(e){ res.json([]); }
+});
+app.post("/delete-certificate/:id", adminOnly, async (req,res)=>{
+  await sb(`certificates?id=eq.${enc(req.params.id)}`, { method:"DELETE", prefer:"return=minimal" });
+  res.redirect("/admin-certificados.html");
+});
+
 app.post("/attendance", loggedOnly, async (req,res)=>{
-  const course_id = req.body.courseId; const lesson_id = req.body.lessonId; const student_name = (req.body.studentName || "").trim();
-  if(!student_name || student_name.length < 3) return res.send(errorPage("Digite seu nome completo para registrar presença.", "/cursos.html"));
-  await sb("attendance", { method:"POST", body:JSON.stringify({ course_id, lesson_id, student_name, user_email:req.session.user.email }) });
+  const course_id = req.body.courseId; const lesson_id = req.body.lessonId; const student_name = (req.body.studentName || "").trim().replace(/\s+/g," "); const student_phone = String(req.body.studentPhone || "").replace(/\D/g,"");
+  if(!student_name || student_name.split(" ").length < 2) return res.send(errorPage("Digite seu nome completo para registrar presença.", "/cursos.html"));
+  if(student_phone.length < 10) return res.send(errorPage("Digite o telefone completo para registrar presença.", "/cursos.html"));
+  const base = { course_id, lesson_id, student_name };
+  let ok = false;
+  try{ await sb("attendance", { method:"POST", body:JSON.stringify({ ...base, student_phone, user_email:req.session.user.email }) }); ok = true; }catch(e){}
+  if(!ok){ try{ await sb("attendance", { method:"POST", body:JSON.stringify({ ...base, phone:student_phone, user_email:req.session.user.email }) }); ok = true; }catch(e){} }
+  if(!ok){ await sb("attendance", { method:"POST", body:JSON.stringify({ ...base, user_email:'TEL:' + student_phone }) }); }
   res.redirect("/cursos.html?presenca=ok");
 });
 app.get("/api/attendance", adminOnly, async (req,res)=>{ res.set("Cache-Control", "no-store"); res.json(await readAttendance()); });

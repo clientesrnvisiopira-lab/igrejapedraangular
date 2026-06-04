@@ -1,0 +1,18 @@
+CORREÇÕES DESTA VERSÃO
+
+1. Presença corrigida para funcionar mesmo se o Supabase ainda não tiver as colunas phone/student_phone.
+   - Primeiro tenta student_phone.
+   - Se não existir, tenta phone.
+   - Se também não existir, salva o telefone em user_email como TEL:numero.
+   Assim o sistema não trava mais com o erro de schema cache.
+
+2. Certificado corrigido para buscar o telefone em qualquer uma dessas opções:
+   - student_phone
+   - phone
+   - user_email = TEL:numero
+
+3. Painel de presença corrigido para carregar mesmo se o banco não tiver student_phone/certificate_code.
+
+RECOMENDADO, MAS NÃO OBRIGATÓRIO:
+Execute o SQL_CERTIFICADOS_E_TELEFONE_SUPABASE.txt no Supabase para deixar o banco mais organizado.
+Mesmo sem executar, esta versão já salva presença e libera certificado usando compatibilidade.

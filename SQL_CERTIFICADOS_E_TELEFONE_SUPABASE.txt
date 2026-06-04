@@ -1,0 +1,35 @@
+-- Execute este arquivo no SQL Editor do Supabase.
+-- Ele adiciona telefone nas presenças e a tabela de certificados.
+
+alter table attendance add column if not exists student_phone text;
+alter table attendance add column if not exists phone text;
+alter table attendance add column if not exists certificate_code text;
+
+-- evita presença duplicada na mesma aula com o mesmo telefone
+create unique index if not exists attendance_course_lesson_phone_unique
+on attendance(course_id, lesson_id, student_phone)
+where student_phone is not null and student_phone <> '';
+
+create table if not exists certificates (
+  id uuid primary key default gen_random_uuid(),
+  course_id uuid references courses(id) on delete cascade,
+  course_title text,
+  student_name text not null,
+  student_phone text not null,
+  code text not null unique,
+  status text default 'issued',
+  issued_at timestamptz default now(),
+  created_at timestamptz default now(),
+  updated_at timestamptz
+);
+
+create unique index if not exists certificates_course_phone_unique
+on certificates(course_id, student_phone);
+
+-- atualização usada pela versão com edição de aulas
+alter table lessons add column if not exists updated_at timestamptz;
+
+
+-- CORRECAO_TELEFONE_PRESENCA
+ALTER TABLE public.attendance ADD COLUMN IF NOT EXISTS student_phone text;
+CREATE INDEX IF NOT EXISTS idx_attendance_student_phone ON public.attendance(student_phone);

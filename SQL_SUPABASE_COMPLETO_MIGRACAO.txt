@@ -250,3 +250,8 @@ create policy "allow all pastor_studies" on pastor_studies for all using (true) 
 
 -- Recarrega cache da API do Supabase/PostgREST
 notify pgrst, 'reload schema';
+
+
+-- CORRECAO_TELEFONE_PRESENCA
+ALTER TABLE public.attendance ADD COLUMN IF NOT EXISTS student_phone text;
+CREATE INDEX IF NOT EXISTS idx_attendance_student_phone ON public.attendance(student_phone);
